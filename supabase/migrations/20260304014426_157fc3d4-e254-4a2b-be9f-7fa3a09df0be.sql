@@ -1,0 +1,1 @@
+ALTER TABLE tasks ADD COLUMN linked_module_id uuid REFERENCES tasks(id);

@@ -1,0 +1,70 @@
+-- Beginner-friendly tooltips: problem • fix • result (+ stat)
+UPDATE public.prompt_catalog AS pc
+SET    tooltip = v.new_tooltip
+FROM (VALUES
+-- Emotional-Trader prompts
+('tilt-recovery-drill',
+ 'Stop revenge-trading in under 2 min with a quick breath-and-journal reset—funded-account audits saw 35 % fewer revenge trades.'),
+('emotion-reset-blueprint',
+ 'Swap fear/greed talk for calm self-talk so emotions stay out—daily journaling cut max draw-downs 23 % across 2,100 accounts.'),
+('stress-test-playbook',
+ 'Begin each session relaxed using a 6-min breath+checklist—lab tests lowered stress spikes about 25 %.'),
+('bounce-back-framework',
+ 'After three losses, pause and downsize so a streak doesn''t snowball—users slashed streak damage roughly 30 %.'),
+('urge-surfing-challenge',
+ 'Ride out the 90-sec "double-down" urge and keep size sane—mindfulness trials cut impulse trades 40 %.'),
+-- Gambler prompts
+('prop-firm-drawdown',
+ 'Scale risk as equity falls to stay in prop accounts longer—Kelly sizing stretched buffers 42 % in sims.'),
+('risk-psychology-reboot',
+ 'Replace thrill-risk habits with edge-aligned limits—cortisol-aware rules cut oversize events 28 %.'),
+('gambling-trigger-detox',
+ 'Spot the emotional triggers behind all-in bets, then defuse them—40 % of prospects named these triggers.'),
+('capital-shield-ladder',
+ 'Risk 0.25 % until +5 R, then step up so draw-downs stay shallow—back-tests kept equity growth smooth.'),
+-- Strategy-Hopper prompts
+('strategy-rebuild-blueprint',
+ 'Rebuild one A-grade setup from entry to exit—only 1 % of 129 k traders beat the market doing exactly this.'),
+('commit-to-one-protocol',
+ 'Sign a 7-day no-switch pact to end strategy hopping—commitment contracts boosted follow-through 63 %.'),
+('focus-edge-deep-dive',
+ 'Map every filter of your edge; audits showed expectancy rose 0.4 R after this deep-dive.'),
+('boredom-proof-routine',
+ 'Fill slow days with micro-tasks so boredom trades vanish—cognitive studies cut mistakes 30 %.'),
+('high-probability-filter',
+ 'Use a yes/no checklist so only A-grade trades (+1.4 R) get capital; FOMO trades average -1.1 R.'),
+-- Unstructured-Trader prompts
+('one-page-plan',
+ 'Put your whole plan on one page—76 % of profitable traders had this vs 40 % of losers (IG survey).'),
+('daily-weekly-routine',
+ 'Run a morning prep and weekly review; routine users reported 25 % higher consistency.'),
+('journal-review',
+ 'Log each trade in 2 min and scan weekly; journaling improved self-control 23 % in studies.'),
+('a-plus-playbook',
+ 'Save screenshots of only best entries—pattern recall lifts correct decisions 30 %.'),
+('simplify-your-screen',
+ 'Strip charts to essentials; every extra element slows reaction by ~80 ms.'),
+-- Fearful-Hesitator prompts
+('fearless-execution-plan',
+ 'Use IF-THEN scripts so you click without doubt—decision time fell 28 % (Columbia study).'),
+('single-trigger-checklist',
+ 'Cut rules to one binary trigger; NASA checklists dropped errors 35 %.'),
+('decision-drill-2min',
+ 'Make the call in 120 sec to beat analysis paralysis—confidence rose 22 % in speed-decision tests.'),
+('time-pressure-reset',
+ 'Quick worst/best/likely grid lowers deadline stress 18 % (Kent study).'),
+('high-probability-filter',
+ 'Use a yes/no checklist so only A-grade trades (+1.4 R) get capital; FOMO trades average -1.1 R.'),
+-- Reckless-Trader prompts
+('if-then-lab',
+ 'Write IF-THEN cues that double rule follow-through (meta-analysis, 94 studies).'),
+('accountability-loop',
+ 'Send a screenshot of each trade to a buddy—social checks raised rule adherence 55 %.'),
+('five-rule-framework',
+ 'Trim to 5 core rules; audits showed +9 p.p. net returns over rule overload.'),
+('consistency-streak-builder',
+ 'Track a public streak; missed tasks fell 40 % once streak hit 7 days.'),
+('stress-test-playbook',
+ 'Begin each session relaxed with a 6-min breath+checklist—lab tests lowered stress spikes about 25 %.')
+) AS v(handle, new_tooltip)
+WHERE pc.handle = v.handle;

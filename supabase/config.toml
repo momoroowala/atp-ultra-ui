@@ -1,0 +1,28 @@
+project_id = "sfaqexmajpfllctqubbt"
+
+[functions.user-sync-api]
+verify_jwt = false
+
+[functions.check-csm-delegations]
+verify_jwt = false
+
+[functions.sync-google-calendar]
+verify_jwt = false
+
+[functions.manage-google-calendar]
+verify_jwt = false
+
+[functions.fathom-webhook]
+verify_jwt = false
+
+[functions.manage-fathom]
+verify_jwt = false
+
+[functions.missed-onboarding-webhook]
+verify_jwt = false
+
+[functions.sme-ticket-webhook]
+verify_jwt = false
+
+[functions.send-scheduled-messages]
+verify_jwt = false

@@ -1,0 +1,525 @@
+// Supabase Edge Function: migrate-google-drive-videos
+// Streaming-Based Batch Processing Implementation
+// Features:
+// - Stream-to-stream transfers (no memory buffering)
+// - Batch processing (default: 10 videos per batch)
+// - File size pre-validation (default: 3GB max)
+// - Resumable migrations via startIndex
+// - Automatic retry logic for downloads/uploads
+
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface MigrationRequest {
+  folderId: string;
+  bucketName: string;
+  targetPath: string;
+  skipExisting?: boolean;
+  batchSize?: number;        // Default: 10 videos per batch
+  startIndex?: number;       // Default: 0 (start from beginning)
+  maxFileSizeGB?: number;    // Default: 3GB max per file
+}
+
+interface MigrationResult {
+  success: boolean;
+  batch: {
+    startIndex: number;
+    processed: number;
+    remaining: number;
+    totalFiles: number;
+    nextStartIndex: number | null;  // null when migration complete
+  };
+  summary: {
+    totalInBatch: number;
+    successful: number;
+    failed: number;
+    skipped: number;
+  };
+  skippedFiles: Array<{
+    fileName: string;
+    reason: string;
+    size: string;
+  }>;
+  errors: Array<{
+    fileName: string;
+    error: string;
+    attempts: number;
+  }>;
+  uploadedFiles: string[];
+}
+
+interface GoogleDriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+}
+
+const VIDEO_MIME_TYPES = [
+  'video/mp4',
+  'video/quicktime',
+  'video/x-msvideo',
+  'video/x-matroska',
+  'video/webm',
+  'video/x-flv',
+  'video/mpeg',
+];
+
+async function getGoogleAccessToken(): Promise<string> {
+  const clientId = Deno.env.get('GOOGLE_OAUTH_CLIENT_ID');
+  const clientSecret = Deno.env.get('GOOGLE_OAUTH_CLIENT_SECRET');
+  const refreshToken = Deno.env.get('GOOGLE_OAUTH_REFRESH_TOKEN');
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('Missing required Google OAuth credentials');
+  }
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to refresh token: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function listVideosFromFolder(
+  folderId: string,
+  accessToken: string
+): Promise<GoogleDriveFile[]> {
+  const videos: GoogleDriveFile[] = [];
+  let pageToken: string | null = null;
+
+  do {
+    const params = new URLSearchParams({
+      q: `'${folderId}' in parents and trashed=false`,
+      fields: 'nextPageToken, files(id, name, mimeType, size)',
+      pageSize: '100',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
+    });
+
+    if (pageToken) {
+      params.set('pageToken', pageToken);
+    }
+
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to list files: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const fileList = data.files || [];
+
+    for (const file of fileList) {
+      if (VIDEO_MIME_TYPES.includes(file.mimeType)) {
+        videos.push(file);
+      }
+    }
+
+    pageToken = data.nextPageToken || null;
+  } while (pageToken);
+
+  return videos;
+}
+
+function sanitizeFilename(filename: string): string {
+  return filename
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+async function getFileMetadata(
+  fileId: string,
+  accessToken: string
+): Promise<{ size: number; name: string; mimeType: string }> {
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?fields=size,name,mimeType&supportsAllDrives=true`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to get file metadata: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return {
+    size: parseInt(data.size, 10),
+    name: data.name,
+    mimeType: data.mimeType,
+  };
+}
+
+function formatFileSize(bytes: number): string {
+  const gb = bytes / (1024 ** 3);
+  const mb = bytes / (1024 ** 2);
+  return gb >= 1 ? `${gb.toFixed(2)} GB` : `${mb.toFixed(2)} MB`;
+}
+
+// CRITICAL: Returns ReadableStream instead of Blob (no memory buffering)
+async function downloadFromGoogleDrive(
+  fileId: string,
+  accessToken: string,
+  maxRetries = 3
+): Promise<ReadableStream<Uint8Array>> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is null');
+      }
+      
+      // Return stream directly - NO BUFFERING
+      return response.body;
+    } catch (error) {
+      lastError = error as Error;
+      console.error(`Download attempt ${attempt} failed:`, error);
+      
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError || new Error('Download failed after retries');
+}
+
+// CRITICAL: Accepts ReadableStream instead of Blob (no memory buffering)
+async function uploadToSupabase(
+  supabase: any,
+  bucketName: string,
+  filePath: string,
+  stream: ReadableStream<Uint8Array>,
+  mimeType: string,
+  maxRetries = 3
+): Promise<void> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const { error } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, stream, {
+          contentType: mimeType,
+          upsert: false,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      return;
+    } catch (error) {
+      lastError = error as Error;
+      console.error(`Upload attempt ${attempt} failed:`, error);
+      
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError || new Error('Upload failed after retries');
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    // API Key Authentication
+    const adminApiKey = Deno.env.get('ADMIN_API_KEY');
+    const authHeader = req.headers.get('Authorization');
+
+    if (!authHeader || authHeader !== `Bearer ${adminApiKey}`) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse request with batch parameters
+    const { 
+      folderId, 
+      bucketName, 
+      targetPath, 
+      skipExisting = true,
+      batchSize = 10,        // Process 10 videos at a time
+      startIndex = 0,        // Start from beginning
+      maxFileSizeGB = 3      // Skip files larger than 3GB
+    }: MigrationRequest = await req.json();
+
+    if (!folderId || !bucketName || !targetPath) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameters' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Starting migration from folder ${folderId} to ${bucketName}/${targetPath}`);
+    console.log(`Batch configuration: startIndex=${startIndex}, batchSize=${batchSize}, maxFileSize=${maxFileSizeGB}GB`);
+
+    const maxFileSizeBytes = maxFileSizeGB * 1024 * 1024 * 1024;
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Verify bucket exists
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some((b: any) => b.name === bucketName);
+
+    if (!bucketExists) {
+      return new Response(
+        JSON.stringify({ error: `Bucket '${bucketName}' does not exist` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get Google Drive access
+    console.log('Getting Google access token...');
+    const accessToken = await getGoogleAccessToken();
+
+    console.log('Listing videos from Google Drive folder...');
+    const videos = await listVideosFromFolder(folderId, accessToken);
+    console.log(`Found ${videos.length} video files`);
+
+    if (videos.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'No videos found in folder',
+          batch: {
+            startIndex: 0,
+            processed: 0,
+            remaining: 0,
+            totalFiles: 0,
+            nextStartIndex: null,
+          },
+          summary: { totalInBatch: 0, successful: 0, failed: 0, skipped: 0 },
+          skippedFiles: [],
+          errors: [],
+          uploadedFiles: [],
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // BATCH PROCESSING LOGIC
+    const totalFiles = videos.length;
+    const endIndex = Math.min(startIndex + batchSize, totalFiles);
+    const batchVideos = videos.slice(startIndex, endIndex);
+    const remaining = totalFiles - endIndex;
+
+    console.log(`Processing batch: files ${startIndex + 1}-${endIndex} of ${totalFiles}`);
+    console.log(`Remaining after this batch: ${remaining}`);
+
+    const result: MigrationResult = {
+      success: true,
+      batch: {
+        startIndex,
+        processed: batchVideos.length,
+        remaining,
+        totalFiles,
+        nextStartIndex: remaining > 0 ? endIndex : null,
+      },
+      summary: { 
+        totalInBatch: batchVideos.length, 
+        successful: 0, 
+        failed: 0, 
+        skipped: 0 
+      },
+      skippedFiles: [],
+      errors: [],
+      uploadedFiles: [],
+    };
+
+    // Process current batch only
+    for (let i = 0; i < batchVideos.length; i++) {
+      const video = batchVideos[i];
+      const globalIndex = startIndex + i;
+      const sanitizedName = sanitizeFilename(video.name);
+      const filePath = `${targetPath}${sanitizedName}`;
+      
+      console.log(`[${globalIndex + 1}/${totalFiles}] Processing: ${video.name}`);
+
+      try {
+        // STEP 1: Pre-validate file size (before downloading)
+        console.log(`  📊 Checking file size...`);
+        const metadata = await getFileMetadata(video.id, accessToken);
+        const fileSize = metadata.size;
+        const fileSizeFormatted = formatFileSize(fileSize);
+        
+        console.log(`  📏 File size: ${fileSizeFormatted}`);
+
+        if (fileSize > maxFileSizeBytes) {
+          console.log(`  ⚠️  Skipped (too large): ${video.name} (${fileSizeFormatted} > ${maxFileSizeGB}GB)`);
+          result.summary.skipped++;
+          result.skippedFiles.push({
+            fileName: video.name,
+            reason: `File size (${fileSizeFormatted}) exceeds limit (${maxFileSizeGB}GB)`,
+            size: fileSizeFormatted,
+          });
+          continue;
+        }
+
+        // STEP 2: Check if file already exists
+        if (skipExisting) {
+          const { data: existingFile } = await supabase.storage
+            .from(bucketName)
+            .list(targetPath, {
+              search: sanitizedName,
+            });
+
+          if (existingFile && existingFile.length > 0) {
+            console.log(`  ✓ Skipped (already exists): ${filePath}`);
+            result.summary.skipped++;
+            continue;
+          }
+        }
+
+        // STEP 3: Download as stream (NO BUFFERING)
+        console.log(`  ↓ Streaming from Google Drive...`);
+        const stream = await downloadFromGoogleDrive(video.id, accessToken);
+
+        // STEP 4: Upload stream directly (NO BUFFERING)
+        console.log(`  ↑ Uploading stream to Supabase Storage...`);
+        await uploadToSupabase(supabase, bucketName, filePath, stream, video.mimeType);
+
+        console.log(`  ✓ Success: ${filePath} (${fileSizeFormatted})`);
+        result.summary.successful++;
+        result.uploadedFiles.push(filePath);
+      } catch (error) {
+        console.error(`  ✗ Failed: ${video.name}`, error);
+        result.summary.failed++;
+        result.errors.push({
+          fileName: video.name,
+          error: (error as Error).message,
+          attempts: 3,
+        });
+      }
+    }
+
+    // Final batch summary
+    console.log('\n=== Batch Complete ===');
+    console.log(`Batch: ${startIndex + 1}-${endIndex} of ${totalFiles}`);
+    console.log(`Processed: ${result.batch.processed}`);
+    console.log(`Successful: ${result.summary.successful}`);
+    console.log(`Failed: ${result.summary.failed}`);
+    console.log(`Skipped (existing): ${result.summary.skipped - result.skippedFiles.length}`);
+    console.log(`Skipped (too large): ${result.skippedFiles.length}`);
+    console.log(`Remaining: ${result.batch.remaining}`);
+    if (result.batch.nextStartIndex !== null) {
+      console.log(`Next batch starts at index: ${result.batch.nextStartIndex}`);
+    }
+
+    return new Response(
+      JSON.stringify(result),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Migration error:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: (error as Error).message 
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+// ============================================================================
+// USAGE INSTRUCTIONS
+// ============================================================================
+//
+// ENDPOINT:
+// POST https://turjtfcvxepwvxbdefag.supabase.co/functions/v1/migrate-google-drive-videos
+//
+// HEADERS:
+// Authorization: Bearer YOUR_ADMIN_API_KEY
+// Content-Type: application/json
+//
+// REQUEST BODY (First Batch):
+// {
+//   "folderId": "1reow5Ee7vEpyc5Id00g5k6p-D7U3Q1Jj",
+//   "bucketName": "stb-course",
+//   "targetPath": "videos/",
+//   "skipExisting": true,
+//   "batchSize": 10,
+//   "startIndex": 0,
+//   "maxFileSizeGB": 3
+// }
+//
+// RESPONSE:
+// {
+//   "success": true,
+//   "batch": {
+//     "startIndex": 0,
+//     "processed": 10,
+//     "remaining": 100,
+//     "totalFiles": 110,
+//     "nextStartIndex": 10  // Use this for next batch
+//   },
+//   "summary": {
+//     "totalInBatch": 10,
+//     "successful": 8,
+//     "failed": 0,
+//     "skipped": 2
+//   },
+//   "skippedFiles": [...],
+//   "errors": [...],
+//   "uploadedFiles": [...]
+// }
+//
+// NEXT BATCH:
+// Use "nextStartIndex" from previous response:
+// {
+//   ...same params,
+//   "startIndex": 10  // From previous response
+// }
+//
+// Continue until "nextStartIndex" is null (migration complete)
+//
+// ============================================================================

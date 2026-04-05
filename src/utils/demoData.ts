@@ -1,0 +1,126 @@
+import type { CallRecording } from '@/hooks/useCallRecordings';
+
+/**
+ * Generate a simple unique ID without external dependencies.
+ */
+const uid = () => crypto.randomUUID();
+
+/**
+ * Return an ISO date string N days in the past.
+ */
+const daysAgo = (n: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+};
+
+export const DEMO_RECORDINGS: CallRecording[] = [
+  {
+    id: uid(),
+    title: 'Brand Outreach Training - Week 12',
+    description: 'How to find and approach brands on SmartScout',
+    recording_url: 'https://example.com/recordings/brand-outreach-week12',
+    thumbnail_url: null,
+    duration_minutes: 45,
+    recorded_date: daysAgo(5),
+    recorded_time: '14:00',
+    tags: ['training', 'brand-outreach'],
+    additional_links: null,
+    created_by: 'demo-admin',
+    is_active: true,
+    visible_tiers: ['all'],
+    visible_tier_ids: null,
+    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+  },
+  {
+    id: uid(),
+    title: 'Mindset Monday - Consistency',
+    description: 'Building daily habits for wholesale success',
+    recording_url: 'https://example.com/recordings/mindset-monday-consistency',
+    thumbnail_url: null,
+    duration_minutes: 30,
+    recorded_date: daysAgo(12),
+    recorded_time: '10:00',
+    tags: ['mindset', 'motivation'],
+    additional_links: null,
+    created_by: 'demo-admin',
+    is_active: true,
+    visible_tiers: ['all'],
+    visible_tier_ids: null,
+    created_at: new Date(Date.now() - 12 * 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 12 * 86400000).toISOString(),
+  },
+  {
+    id: uid(),
+    title: 'Warehouse Operations Review',
+    description: 'Shipping procedures and quality control walkthrough',
+    recording_url: 'https://example.com/recordings/warehouse-ops-review',
+    thumbnail_url: null,
+    duration_minutes: 60,
+    recorded_date: daysAgo(20),
+    recorded_time: '11:00',
+    tags: ['warehouse', 'operations'],
+    additional_links: null,
+    created_by: 'demo-admin',
+    is_active: true,
+    visible_tiers: ['all'],
+    visible_tier_ids: null,
+    created_at: new Date(Date.now() - 20 * 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 20 * 86400000).toISOString(),
+  },
+  {
+    id: uid(),
+    title: 'Q&A Session - Brand Approvals',
+    description: 'Common questions about getting approved by brands',
+    recording_url: 'https://example.com/recordings/qa-brand-approvals',
+    thumbnail_url: null,
+    duration_minutes: 55,
+    recorded_date: daysAgo(30),
+    recorded_time: '15:00',
+    tags: ['qa', 'approvals'],
+    additional_links: null,
+    created_by: 'demo-admin',
+    is_active: true,
+    visible_tiers: ['all'],
+    visible_tier_ids: null,
+    created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+  },
+  {
+    id: uid(),
+    title: 'Advanced Brand Outreach Strategies',
+    description: 'Email templates and follow-up sequences that work',
+    recording_url: 'https://example.com/recordings/advanced-brand-outreach',
+    thumbnail_url: null,
+    duration_minutes: 50,
+    recorded_date: daysAgo(42),
+    recorded_time: '13:00',
+    tags: ['training', 'brand-outreach', 'advanced'],
+    additional_links: null,
+    created_by: 'demo-admin',
+    is_active: true,
+    visible_tiers: ['all'],
+    visible_tier_ids: null,
+    created_at: new Date(Date.now() - 42 * 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 42 * 86400000).toISOString(),
+  },
+  {
+    id: uid(),
+    title: 'Warehouse Call - Inventory Management',
+    description: 'How to track inventory and avoid stockouts',
+    recording_url: 'https://example.com/recordings/warehouse-inventory-mgmt',
+    thumbnail_url: null,
+    duration_minutes: 40,
+    recorded_date: daysAgo(55),
+    recorded_time: '09:00',
+    tags: ['warehouse', 'inventory'],
+    additional_links: null,
+    created_by: 'demo-admin',
+    is_active: true,
+    visible_tiers: ['all'],
+    visible_tier_ids: null,
+    created_at: new Date(Date.now() - 55 * 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 55 * 86400000).toISOString(),
+  },
+];

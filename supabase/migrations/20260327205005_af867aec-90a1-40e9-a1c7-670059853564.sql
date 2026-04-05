@@ -1,0 +1,1 @@
+UPDATE roles SET page_visibility = jsonb_set(COALESCE(page_visibility, '{}'::jsonb), '{my_notes}', 'true'::jsonb) WHERE role_key = 'client';

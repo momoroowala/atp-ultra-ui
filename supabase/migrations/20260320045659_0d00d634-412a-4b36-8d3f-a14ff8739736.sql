@@ -1,0 +1,1 @@
+ALTER TABLE public.community_channels ADD COLUMN is_read_only BOOLEAN DEFAULT false;
