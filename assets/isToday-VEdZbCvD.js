@@ -1,0 +1,1 @@
+import{$ as e,aM as n,ao as i}from"./index-DeAPs4-E.js";import{s}from"./startOfDay-Du_5JpjX.js";function D(t,r){const a=e(t);return isNaN(r)?n(t,NaN):(r&&a.setDate(a.getDate()+r),a)}function f(t,r){const a=s(t),o=s(r);return+a==+o}function y(t){return f(t,i(t))}export{D as a,f as b,y as i};
