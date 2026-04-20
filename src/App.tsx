@@ -1,10 +1,10 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { ThemeProvider } from "next-themes";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AdminRoute } from "./components/AdminRoute";
@@ -114,17 +114,67 @@ const AuthenticatedLayout = ({
     </div>
   </SidebarProvider>;
 };
+// GitHub Pages SPA redirect handler -- picks up path stored by 404.html
+function SpaRedirectHandler() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const redirect = sessionStorage.getItem('spa-redirect');
+    if (redirect) {
+      sessionStorage.removeItem('spa-redirect');
+      navigate(redirect, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+// Seed localStorage with demo data for GitHub Pages deploy
+function SeedDemoData() {
+  if (import.meta.env.BASE_URL === '/') return null;
+  if (localStorage.getItem('demo_seeded')) return null;
+
+  // Brand leads
+  const leads = [
+    { id: 'seed-1', user_id: 'demo-admin-001', company_brand_name: 'GreenLeaf Organics', category: 'Health & Household', contact_name: 'Sarah Mitchell', email: 'sarah@greenleaf.com', phone: '555-0101', status: 'Email Sent', business_model: 'Brand', website: 'greenleaforganics.com', state: 'CA', amazon_lead_product_url: null, notes: 'Found on SmartScout', last_email_sent_date: '2026-04-01', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 'seed-2', user_id: 'demo-admin-001', company_brand_name: 'PureVita Supplements', category: 'Beauty & Personal Care', contact_name: 'James Chen', email: 'james@purevita.com', phone: '555-0102', status: 'Approved', business_model: 'Brand', website: 'purevita.com', state: 'NY', amazon_lead_product_url: null, notes: 'Account opened', last_email_sent_date: '2026-03-25', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 'seed-3', user_id: 'demo-admin-001', company_brand_name: 'KidsBright Toys', category: 'Toys & Games', contact_name: 'Maria Rodriguez', email: 'maria@kidsbright.com', phone: '555-0103', status: '2 Email Sent', business_model: 'Brand', website: 'kidsbright.com', state: 'TX', amazon_lead_product_url: null, notes: 'Follow up scheduled', last_email_sent_date: '2026-03-28', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 'seed-4', user_id: 'demo-admin-001', company_brand_name: 'NaturePaws Pet Co', category: 'Pet Supplies', contact_name: 'Lisa Park', email: 'lisa@naturepaws.com', phone: '555-0105', status: 'Phone Call', business_model: 'Brand', website: 'naturepaws.com', state: 'WA', amazon_lead_product_url: null, notes: 'Strong Amazon presence', last_email_sent_date: '2026-04-03', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 'seed-5', user_id: 'demo-admin-001', company_brand_name: 'FreshHome Living', category: 'Home & Kitchen', contact_name: 'Tom Wilson', email: 'tom@freshhome.com', phone: '555-0104', status: 'Approved', business_model: 'Brand', website: 'freshhomeliving.com', state: 'FL', amazon_lead_product_url: null, notes: 'Ready for PO', last_email_sent_date: '2026-03-25', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  ];
+  localStorage.setItem('brand_leads_local', JSON.stringify(leads));
+
+  // Support tickets
+  const tickets = [
+    { id: 'seed-tk-1', ticket_number: 1, subject: 'SmartScout integration question', description: 'How do I connect SmartScout filters?', priority: 'medium', status: 'open', ticket_type: 'support', topic: 'Platform Question', submitter_name: 'Mo', submitter_email: 'mo@test.dev', submitter_user_id: 'demo-admin-001', has_new_reply: false, internal: false, attachments: [], created_at: new Date(Date.now() - 86400000).toISOString(), updated_at: new Date(Date.now() - 86400000).toISOString() },
+    { id: 'seed-tk-2', ticket_number: 2, subject: 'Brand approval process', description: 'What documents do I need for brand approval?', priority: 'low', status: 'resolved', ticket_type: 'support', topic: 'Program Content Issue', submitter_name: 'Mo', submitter_email: 'mo@test.dev', submitter_user_id: 'demo-admin-001', has_new_reply: false, internal: false, attachments: [], created_at: new Date(Date.now() - 172800000).toISOString(), updated_at: new Date(Date.now() - 172800000).toISOString() },
+  ];
+  localStorage.setItem('demo_support_tickets', JSON.stringify(tickets));
+
+  // Demo awarded badges
+  localStorage.setItem('demo_awarded_badges', JSON.stringify(['first_login', 'brand_hunter', 'community_star', 'streak_7']));
+
+  // Daily actions
+  const today = new Date().toISOString().split('T')[0];
+  localStorage.setItem(`daily_actions_${today}`, JSON.stringify({ 0: true, 1: false, 2: true, 3: false, 4: false }));
+
+  // Sprint task notes
+  localStorage.setItem('sprint_task_notes_local', JSON.stringify({ 'task-1': 'Need to finish resale cert by Wednesday', 'task-3': 'Dun & Bradstreet took 2 days to process' }));
+
+  localStorage.setItem('demo_seeded', '1');
+  return null;
+}
+
 const App = () => <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="light" storageKey="eec-theme">
       <AuthProvider>
+        <SeedDemoData />
         <BadgeEarnedNotification />
         <BadgeCelebrationModal />
         <InitializeUserSession />
         <AppVersionChecker />
         <TooltipProvider>
         <Sonner />
-        <BrowserRouter>
-          
+        <BrowserRouter basename={import.meta.env.BASE_URL !== '/' ? import.meta.env.BASE_URL.replace(/\/$/, '') : undefined}>
+          <SpaRedirectHandler />
           <PWAInstallPrompt />
           <Suspense fallback={<div className="flex-1 flex items-center justify-center"><LoaderShimmer /></div>}>
           <Routes>

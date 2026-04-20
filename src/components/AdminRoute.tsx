@@ -8,6 +8,9 @@ interface AdminRouteProps {
 }
 
 export const AdminRoute = ({ children }: AdminRouteProps) => {
+  // GitHub Pages: bypass admin check
+  if (import.meta.env.BASE_URL !== '/') return <>{children}</>;
+
   const { canAccessAdminPanel, loading } = useRoleCheck();
 
   if (loading) {

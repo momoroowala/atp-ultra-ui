@@ -154,7 +154,15 @@ export default function CSMPanel() {
   };
 
   return (
-    <main className="flex-1 overflow-auto bg-content">
+    <main className="flex-1 overflow-auto bg-content csm-panel-readable">
+      <style>{`
+        .csm-panel-readable .text-\\[9px\\] { font-size: 11px !important; }
+        .csm-panel-readable .text-\\[10px\\] { font-size: 12px !important; }
+        .csm-panel-readable .text-\\[11px\\] { font-size: 13px !important; }
+        .csm-panel-readable .text-xs { font-size: 13px !important; line-height: 1.4 !important; }
+        .csm-panel-readable .text-sm { font-size: 14px !important; }
+        .csm-panel-readable .text-\\[13px\\] { font-size: 14px !important; }
+      `}</style>
       <div className="container mx-auto px-4 md:px-6 py-5 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">

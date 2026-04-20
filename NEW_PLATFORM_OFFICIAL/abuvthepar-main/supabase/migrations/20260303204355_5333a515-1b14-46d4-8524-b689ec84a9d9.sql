@@ -1,0 +1,2 @@
+UPDATE courses SET thumbnail_url = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=400&fit=crop' WHERE id = 'e01ad39f-2bf6-42d5-b354-27962cc77be5';
+UPDATE courses SET thumbnail_url = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=400&fit=crop' WHERE id = '1854c105-0bef-4612-a4cb-6426a01b3741';

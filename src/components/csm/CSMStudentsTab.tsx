@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -32,9 +32,54 @@ export function CSMStudentsTab({ onViewStudentDetails }: CSMStudentsTabProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const queryClient = useQueryClient();
 
-  const { data: students = [], isLoading: studentsLoading } = useCSMStudents(csmFilter);
+  const { data: rawStudents = [], isLoading: studentsLoading } = useCSMStudents(csmFilter);
   const { data: tiers = [] } = useTiers();
   const { data: csmList = [] } = useCSMList();
+
+  // Demo students fallback
+  const students: CSMStudent[] = useMemo(() => {
+    if (rawStudents.length > 0) return rawStudents;
+    const names = [
+      ['Sarah','Chen'],['Marcus','Rivera'],['Jordan','Williams'],['Priya','Patel'],['Tyler','Brooks'],
+      ['Aisha','Johnson'],['David','Kim'],['Emma','Thompson'],['Alex','Morgan'],['Nina','Sato'],
+      ['Liam','Garcia'],['Sophia','Martinez'],['Ethan','Lee'],['Olivia','Brown'],['Mason','Taylor'],
+      ['Isabella','Anderson'],['Logan','Thomas'],['Mia','Jackson'],['James','White'],['Ava','Wilson'],
+      ['Benjamin','Harris'],['Charlotte','Clark'],['Jacob','Lewis'],['Amelia','Robinson'],['Michael','Walker'],
+      ['Harper','Hall'],['Daniel','Allen'],['Evelyn','Young'],['Sebastian','King'],['Abigail','Wright'],
+      ['Henry','Lopez'],['Emily','Hill'],['Owen','Scott'],['Ella','Green'],['Jack','Adams'],
+      ['Scarlett','Baker'],['Lucas','Nelson'],['Grace','Carter'],['Aiden','Mitchell'],['Chloe','Roberts'],
+      ['Samuel','Turner'],['Zoey','Phillips'],['Joseph','Campbell'],['Lily','Parker'],['John','Evans'],
+      ['Hannah','Edwards'],['Ryan','Stewart'],['Aria','Collins'],['Luke','Morris'],['Riley','Murphy'],
+    ];
+    const tierKeys = ['stb','stb','stb','elite','elite','elite','ultimate','ultimate','platinum','platinum','stb','stb','elite','stb','stb','ultimate','stb','elite','stb','platinum','stb','stb','elite','stb','ultimate','stb','stb','elite','stb','stb','stb','elite','stb','stb','ultimate','stb','stb','elite','stb','stb','stb','elite','stb','stb','stb','stb','elite','stb','stb','stb'];
+    const now = Date.now();
+    const day = 86400000;
+    return names.map(([fn, ln], i): CSMStudent => {
+      const daysAgo = i < 5 ? Math.floor(Math.random() * 3) : i < 15 ? Math.floor(Math.random() * 7) : i < 30 ? Math.floor(Math.random() * 20) + 7 : i < 40 ? Math.floor(Math.random() * 60) + 14 : null;
+      const totalTasks = 16;
+      const prog = daysAgo === null ? 0 : daysAgo < 3 ? 40 + Math.floor(Math.random() * 60) : daysAgo < 7 ? 20 + Math.floor(Math.random() * 50) : Math.floor(Math.random() * 30);
+      return {
+        id: `demo-student-${i}`,
+        firstName: fn,
+        lastName: ln,
+        email: `${fn.toLowerCase()}.${ln.toLowerCase()}@student.dev`,
+        tier: (tierKeys[i] || 'stb').toUpperCase(),
+        tierId: `tier-${tierKeys[i]}`,
+        assignedCsmId: 'demo-admin-001',
+        isActive: daysAgo !== null && daysAgo < 30,
+        completedTasks: Math.round(totalTasks * prog / 100),
+        totalTasks,
+        progressPercentage: prog,
+        lastSignInAt: daysAgo !== null ? new Date(now - daysAgo * day).toISOString() : null,
+        createdAt: new Date(now - (60 + i * 2) * day).toISOString(),
+        onboardingBookingStatus: i < 20 ? 'completed' : i < 35 ? 'not_started' : 'missed',
+        onboardingDate: i < 20 ? new Date(now - (50 + i) * day).toISOString() : null,
+        offboardingDate: null,
+        guaranteeStatus: i < 15 ? 'met' : i < 25 ? 'pending' : 'activated',
+        revenue: Math.floor(Math.random() * 15000),
+      };
+    });
+  }, [rawStudents]);
 
   const getStatus = (s: CSMStudent) => {
     if (!s.isActive) return 'Refunded';

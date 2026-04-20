@@ -57,6 +57,19 @@ const defaultPageVisibility: PageVisibility = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  // GitHub Pages demo: return fake admin user so dashboard populates
+  if (import.meta.env.BASE_URL !== '/') {
+    const fakeUser = { id: 'demo-admin-001', email: 'mo@test.dev', app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '2025-01-01' } as unknown as User;
+    const allPages: PageVisibility = { home: true, courses: true, my_plan: true, calendar: true, community: true, one_on_ones: true, support: true, admin_panel: true, support_tickets: true, csm_panel: true, brand_leads: true, my_notes: true };
+    const demoValue: AuthContextType = {
+      user: fakeUser, session: null, loading: false, adminLoading: false,
+      roles: ['mega_admin', 'admin', 'csm'], isAdmin: true, featureAccess: {},
+      featureVisibility: { crisp_chat_visible: false }, pageVisibility: allPages,
+      signOut: async () => {},
+    };
+    return <AuthContext.Provider value={demoValue}>{children}</AuthContext.Provider>;
+  }
+
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);

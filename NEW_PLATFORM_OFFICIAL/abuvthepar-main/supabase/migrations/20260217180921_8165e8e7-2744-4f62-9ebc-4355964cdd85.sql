@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.get_users_with_progress(integer, integer, text, uuid[], uuid, text, uuid[], text, text, text);

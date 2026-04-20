@@ -5,7 +5,7 @@ import {
   Check, ChevronDown, ArrowRight, Blocks, Wrench, Mail, TrendingUp,
   Rocket, Package, Phone, Search, ShieldCheck, BarChart3, Play, Timer,
   Coffee, RotateCcw, Pause, ChevronRight, StickyNote, Clock,
-  CalendarDays, Columns3, Focus, LayoutDashboard,
+  CalendarDays, Columns3, Focus, LayoutDashboard, FileText, Loader2,
 } from "lucide-react";
 import { MobileLogoHeader } from "@/components/MobileLogoHeader";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,6 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useSprintData } from "@/hooks/useSprintData";
 import { useSprintModuleLookup } from "@/hooks/useSprintModuleLookup";
 import { useSprintTaskNotes } from "@/hooks/useSprintTaskNotes";
+import { useMyNotes, type NoteWithTask } from "@/hooks/useMyNotes";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ChecklistTask } from "@/components/sprint/ChecklistTask";
 import { PhaseCompletionBanner } from "@/components/sprint/PhaseCompletionBanner";
 import { SprintTaskDetailDrawer } from "@/components/sprint/SprintTaskDetailDrawer";
@@ -24,7 +26,7 @@ import type { SprintTask } from "@/hooks/useSprintData";
 // ---------------------------------------------------------------------------
 // Layout types
 // ---------------------------------------------------------------------------
-type LayoutMode = "default" | "focus" | "kanban" | "planner";
+type LayoutMode = "default" | "focus" | "kanban" | "planner" | "notes";
 
 const LAYOUT_STORAGE_KEY = "myplan_layout";
 
@@ -33,6 +35,7 @@ const LAYOUT_OPTIONS: { key: LayoutMode; label: string; icon: React.ElementType 
   { key: "focus", label: "Focus", icon: Focus },
   { key: "kanban", label: "Kanban", icon: Columns3 },
   { key: "planner", label: "Planner", icon: CalendarDays },
+  { key: "notes", label: "Notes", icon: StickyNote },
 ];
 
 // ---------------------------------------------------------------------------
@@ -419,22 +422,134 @@ function LayoutFocus({
 }
 
 // ---------------------------------------------------------------------------
-// Layout B: Kanban Board
+// Layout B: Kanban Board (with drag-and-drop via @dnd-kit)
 // ---------------------------------------------------------------------------
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  DragOverlay, useDroppable,
+  type DragStartEvent, type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+type KanbanColumn = 'todo' | 'pending' | 'done';
+const COLUMN_STATUS_MAP: Record<KanbanColumn, 'not_started' | 'pending' | 'completed'> = {
+  todo: 'not_started',
+  pending: 'pending',
+  done: 'completed',
+};
+
+function KanbanDropZone({ id, title, count, color, isEmpty, emptyMsg, children }: {
+  id: string; title: string; count: number; color: string;
+  isEmpty: boolean; emptyMsg: string; children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} className="space-y-2">
+      <div className="flex items-center gap-2 mb-1">
+        <h3 className={cn("text-xs font-bold uppercase tracking-wider", color)}>{title}</h3>
+        <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">{count}</span>
+      </div>
+      <div className={cn(
+        "space-y-2 min-h-[120px] rounded-lg transition-colors p-1",
+        isOver && "bg-primary/5 ring-1 ring-primary/20"
+      )}>
+        {isEmpty && !isOver && (
+          <div className="rounded-lg border border-dashed border-border/50 bg-muted/10 p-4 text-center">
+            <span className="text-xs text-muted-foreground/50">{emptyMsg}</span>
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DraggableTaskCard({ task, theme, getModuleLink, setSelectedTask, navigate }: {
+  task: SprintTask;
+  theme: PhaseTheme;
+  getModuleLink: LayoutProps['getModuleLink'];
+  setSelectedTask: LayoutProps['setSelectedTask'];
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    borderLeftColor: `hsl(var(--primary) / 0.5)`,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  const modules = task.modules ?? [];
+  const moduleLink = modules.length > 0 ? getModuleLink(modules[0].module_name) : null;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={cn(
+        "rounded-lg border bg-card p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group touch-none",
+        "border-l-[3px]",
+        theme ? theme.borderAccent : "border-border"
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <span className="text-sm font-medium text-foreground leading-snug flex-1 min-w-0 line-clamp-2">
+          {task.title}
+        </span>
+        <span className="text-[9px] font-bold text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+          D{task.day_number}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-2">
+        <button
+          onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+          className="text-[10px] text-muted-foreground hover:text-primary transition-colors"
+        >
+          Details
+        </button>
+        {moduleLink && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/courses/${moduleLink.courseId}?phaseId=${moduleLink.phaseId}`);
+            }}
+            className="ml-auto"
+          >
+            <Play className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
+        )}
+      </div>
+      <div className="text-[9px] text-muted-foreground/40 mt-1">
+        Drag to move between columns
+      </div>
+    </div>
+  );
+}
+
 function LayoutKanban({
-  phases, completions, activePhase, phaseThemes, toggleCompletion, getModuleLink, setSelectedTask,
+  phases, completions, activePhase, phaseThemes, setTaskStatus, getModuleLink, setSelectedTask,
   getPhaseCompletedCount, getPhaseTaskCount, getTasksForPhase,
 }: LayoutProps) {
   const navigate = useNavigate();
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
-  // Default to active phase
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
   const phaseId = selectedPhaseId ?? activePhase?.id ?? phases[0]?.id;
   const phaseIdx = phases.findIndex((p) => p.id === phaseId);
   const theme = phaseThemes[phaseIdx] ?? phaseThemes[0];
   const phaseTasks = phaseId ? getTasksForPhase(phaseId) : [];
 
-  const todoTasks = phaseTasks.filter((t) => !completions.has(t.id));
+  const todoTasks = phaseTasks.filter((t) => !completions.has(t.id) || completions.get(t.id) === 'not_started');
   const pendingTasks = phaseTasks.filter((t) => completions.get(t.id) === "pending");
   const doneTasks = phaseTasks.filter((t) => completions.get(t.id) === "completed");
 
@@ -442,10 +557,50 @@ function LayoutKanban({
   const overallTotal = phases.reduce((sum, p) => sum + getPhaseTaskCount(p.id), 0);
   const overallPct = overallTotal > 0 ? Math.round((overallDone / overallTotal) * 100) : 0;
 
+  // Find which column a task lives in
+  const getTaskColumn = (taskId: string): KanbanColumn => {
+    const status = completions.get(taskId);
+    if (status === 'completed') return 'done';
+    if (status === 'pending') return 'pending';
+    return 'todo';
+  };
+
+  // Find which column a droppable ID refers to
+  const getDropColumn = (overId: string): KanbanColumn | null => {
+    if (overId === 'col-todo') return 'todo';
+    if (overId === 'col-pending') return 'pending';
+    if (overId === 'col-done') return 'done';
+    // If dropped on another task, find that task's column
+    const overTask = phaseTasks.find(t => t.id === overId);
+    if (overTask) return getTaskColumn(overTask.id);
+    return null;
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveTaskId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveTaskId(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const targetColumn = getDropColumn(over.id as string);
+    if (!targetColumn) return;
+
+    const currentColumn = getTaskColumn(taskId);
+    if (currentColumn === targetColumn) return;
+
+    setTaskStatus(taskId, COLUMN_STATUS_MAP[targetColumn]);
+  };
+
+  const activeTask = activeTaskId ? phaseTasks.find(t => t.id === activeTaskId) : null;
+
   const columns = [
-    { title: "To Do", tasks: todoTasks, emptyMsg: "Nothing to do!", color: "text-muted-foreground" },
-    { title: "In Progress", tasks: pendingTasks, emptyMsg: "Nothing in progress", color: "text-amber-500" },
-    { title: "Done", tasks: doneTasks, emptyMsg: "Nothing completed yet", color: "text-green-500" },
+    { id: 'col-todo' as const, title: "To Do", tasks: todoTasks, emptyMsg: "Nothing to do!", color: "text-muted-foreground" },
+    { id: 'col-pending' as const, title: "In Progress", tasks: pendingTasks, emptyMsg: "Nothing in progress", color: "text-amber-500" },
+    { id: 'col-done' as const, title: "Done", tasks: doneTasks, emptyMsg: "Nothing completed yet", color: "text-green-500" },
   ];
 
   return (
@@ -483,71 +638,51 @@ function LayoutKanban({
         </div>
       </div>
 
-      {/* Kanban columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {columns.map((col) => (
-          <div key={col.title} className="space-y-2">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className={cn("text-xs font-bold uppercase tracking-wider", col.color)}>{col.title}</h3>
-              <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">{col.tasks.length}</span>
-            </div>
-            <div className="space-y-2 min-h-[120px]">
-              {col.tasks.length === 0 && (
-                <div className="rounded-lg border border-dashed border-border/50 bg-muted/10 p-4 text-center">
-                  <span className="text-xs text-muted-foreground/50">{col.emptyMsg}</span>
-                </div>
-              )}
-              {col.tasks.map((task) => {
-                const modules = task.modules ?? [];
-                const moduleLink = modules.length > 0 ? getModuleLink(modules[0].module_name) : null;
-                return (
-                  <div
+      {/* Kanban columns with drag-and-drop */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {columns.map((col) => (
+            <KanbanDropZone
+              key={col.id}
+              id={col.id}
+              title={col.title}
+              count={col.tasks.length}
+              color={col.color}
+              isEmpty={col.tasks.length === 0}
+              emptyMsg={col.emptyMsg}
+            >
+              <SortableContext items={col.tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                {col.tasks.map((task) => (
+                  <DraggableTaskCard
                     key={task.id}
-                    className={cn(
-                      "rounded-lg border bg-card p-3 cursor-pointer hover:shadow-md transition-all group",
-                      `border-l-[3px]`,
-                      theme ? theme.borderAccent : "border-border"
-                    )}
-                    style={{ borderLeftColor: `hsl(var(--primary) / 0.5)` }}
-                    onClick={() => toggleCompletion(task.id)}
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="text-sm font-medium text-foreground leading-snug flex-1 min-w-0 line-clamp-2">
-                        {task.title}
-                      </span>
-                      <span className="text-[9px] font-bold text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
-                        D{task.day_number}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
-                        className="text-[10px] text-muted-foreground hover:text-primary transition-colors"
-                      >
-                        Details
-                      </button>
-                      {moduleLink && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/courses/${moduleLink.courseId}?phaseId=${moduleLink.phaseId}`);
-                          }}
-                          className="ml-auto"
-                        >
-                          <Play className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="text-[9px] text-muted-foreground/40 mt-1">
-                      Click to cycle status
-                    </div>
-                  </div>
-                );
-              })}
+                    task={task}
+                    theme={theme}
+                    getModuleLink={getModuleLink}
+                    setSelectedTask={setSelectedTask}
+                    navigate={navigate}
+                  />
+                ))}
+              </SortableContext>
+            </KanbanDropZone>
+          ))}
+        </div>
+
+        <DragOverlay>
+          {activeTask && (
+            <div
+              className="rounded-lg border bg-card p-3 shadow-xl border-l-[3px] opacity-90"
+              style={{ borderLeftColor: `hsl(var(--primary) / 0.5)` }}
+            >
+              <span className="text-sm font-medium text-foreground">{activeTask.title}</span>
             </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </DragOverlay>
+      </DndContext>
 
       {/* Compact timer */}
       <FocusTimer compact />
@@ -783,6 +918,125 @@ function LayoutPlanner({
 // ---------------------------------------------------------------------------
 // Shared layout props interface
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Layout D: Notes (aggregated from all tasks)
+// ---------------------------------------------------------------------------
+function NoteEditorInline({ note, isExpanded, onToggle }: { note: NoteWithTask; isExpanded: boolean; onToggle: () => void }) {
+  const { content, updateContent, loading, saved } = useSprintTaskNotes(isExpanded ? note.sprint_task_id : null);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onToggle}
+      className={cn(
+        "w-full text-left rounded-xl border border-border bg-card p-4 transition-all hover:shadow-sm",
+        isExpanded && "ring-1 ring-primary/20"
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="font-medium text-sm text-foreground truncate">
+            Day {note.day_number}: {note.task_title}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {saved && <Check className="h-3.5 w-3.5 text-green-500" />}
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {(() => { try { return `${Math.round((Date.now() - new Date(note.updated_at).getTime()) / 60000)}m ago`; } catch { return ''; } })()}
+          </span>
+        </div>
+      </div>
+
+      {!isExpanded && (
+        <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{note.content}</p>
+      )}
+
+      {isExpanded && (
+        <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+          {loading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Textarea
+              value={content}
+              onChange={(e) => updateContent(e.target.value)}
+              placeholder="Write your notes..."
+              className="min-h-[120px] resize-y text-sm"
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LayoutNotes() {
+  const { data: groups, isLoading } = useMyNotes();
+  const [expandedNote, setExpandedNote] = useState<string | null>(null);
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10">
+          <StickyNote className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-foreground">My Notes</h2>
+          <p className="text-sm text-muted-foreground">All your roadmap task notes in one place</p>
+        </div>
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {!isLoading && (!groups || groups.length === 0) && (
+        <div className="text-center py-16">
+          <StickyNote className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-1">No notes yet</h3>
+          <p className="text-sm text-muted-foreground">
+            Start taking notes from your Roadmap tasks -- they'll appear here.
+          </p>
+        </div>
+      )}
+
+      {groups && groups.length > 0 && (
+        <Accordion type="multiple" defaultValue={groups.map(g => g.phase_id)} className="space-y-3">
+          {groups.map((group) => (
+            <AccordionItem key={group.phase_id} value={group.phase_id} className="border rounded-xl bg-card/50 px-4">
+              <AccordionTrigger className="hover:no-underline py-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-foreground">{group.phase_title}</span>
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                    {group.notes.length} {group.notes.length === 1 ? 'note' : 'notes'}
+                  </span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <div className="space-y-2">
+                  {group.notes.map((note) => (
+                    <NoteEditorInline
+                      key={note.id}
+                      note={note}
+                      isExpanded={expandedNote === note.id}
+                      onToggle={() => setExpandedNote(prev => prev === note.id ? null : note.id)}
+                    />
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      )}
+    </div>
+  );
+}
+
 interface LayoutProps {
   phases: ReturnType<typeof useSprintData>["phases"];
   tasks: ReturnType<typeof useSprintData>["tasks"];
@@ -790,6 +1044,7 @@ interface LayoutProps {
   activePhase: ReturnType<typeof useSprintData>["phases"][number] | undefined;
   phaseThemes: PhaseTheme[];
   toggleCompletion: (taskId: string) => void;
+  setTaskStatus: (taskId: string, status: 'pending' | 'completed' | 'not_started') => void;
   getModuleLink: ReturnType<typeof useSprintModuleLookup>["getModuleLink"];
   setSelectedTask: (task: SprintTask) => void;
   getPhaseCompletedCount: (phaseId: string) => number;
@@ -973,6 +1228,7 @@ const MyPlan = () => {
     completions,
     isLoading,
     toggleCompletion,
+    setTaskStatus,
     getPhaseTaskCount,
     getPhaseCompletedCount,
     getTasksForPhase,
@@ -1037,7 +1293,7 @@ const MyPlan = () => {
 
   // Shared layout props
   const layoutProps: LayoutProps = {
-    phases, tasks, completions, activePhase, phaseThemes, toggleCompletion,
+    phases, tasks, completions, activePhase, phaseThemes, toggleCompletion, setTaskStatus,
     getModuleLink, setSelectedTask, getPhaseCompletedCount, getPhaseTaskCount, getTasksForPhase,
   };
 
@@ -1128,6 +1384,7 @@ const MyPlan = () => {
               {layout === "focus" && <LayoutFocus {...layoutProps} />}
               {layout === "kanban" && <LayoutKanban {...layoutProps} />}
               {layout === "planner" && <LayoutPlanner {...layoutProps} />}
+              {layout === "notes" && <LayoutNotes />}
             </motion.div>
           </AnimatePresence>
         </div>

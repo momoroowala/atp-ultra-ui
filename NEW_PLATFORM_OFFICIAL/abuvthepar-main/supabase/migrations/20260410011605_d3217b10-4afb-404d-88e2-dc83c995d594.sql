@@ -1,0 +1,1 @@
+UPDATE csm_dm_templates SET trigger_type = 'on_assignment' WHERE id = '51393656-2502-4a71-9fad-c64fc6e31ac0';

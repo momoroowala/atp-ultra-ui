@@ -10,7 +10,9 @@ import { useInlineTaskDetail } from "@/hooks/useInlineTaskDetail";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserCourseAccess } from "@/hooks/useUserCourseAccess";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Lock, Check, Play, BookOpen, FileText, Send } from "lucide-react";
+import { ArrowLeft, Loader2, Lock, Check, Play, BookOpen, FileText, Send, Heart, StickyNote } from "lucide-react";
+import { useFavoriteModules } from "@/hooks/useFavoriteModules";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -292,14 +294,77 @@ const DEFAULT_DEMO_COURSE = {
 /*  Demo Inline Content Renderer                                       */
 /* ================================================================== */
 
+function LessonNotesAndFavorite({ taskId, taskTitle, courseId, courseTitle, phaseId, phaseTitle }: {
+  taskId: string; taskTitle: string; courseId: string; courseTitle: string; phaseId: string; phaseTitle: string;
+}) {
+  const NOTES_KEY = 'lesson_notes';
+  const { isFavorited, toggleFavorite } = useFavoriteModules();
+  const favorited = isFavorited(taskId);
+  const [note, setNote] = useState(() => {
+    try { const all = JSON.parse(localStorage.getItem(NOTES_KEY) || '{}'); return all[taskId] || ''; } catch { return ''; }
+  });
+  const [saved, setSaved] = useState(false);
+
+  const saveNote = (val: string) => {
+    setNote(val);
+    setSaved(false);
+    try {
+      const all = JSON.parse(localStorage.getItem(NOTES_KEY) || '{}');
+      if (val.trim()) all[taskId] = val; else delete all[taskId];
+      localStorage.setItem(NOTES_KEY, JSON.stringify(all));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {}
+  };
+
+  return (
+    <div className="mt-8 space-y-4">
+      {/* Heart / Favorite button */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => toggleFavorite({ taskId, taskTitle, courseId, courseTitle, phaseId, phaseTitle })}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all",
+            favorited
+              ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400"
+              : "border-border text-muted-foreground hover:text-red-500 hover:border-red-200"
+          )}
+        >
+          <Heart className={cn("h-4 w-4", favorited && "fill-current")} />
+          {favorited ? "Saved" : "Save Module"}
+        </button>
+      </div>
+
+      {/* Notes section */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <StickyNote className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">My Notes</span>
+          {saved && <Check className="h-3.5 w-3.5 text-green-500 ml-auto" />}
+        </div>
+        <Textarea
+          value={note}
+          onChange={(e) => saveNote(e.target.value)}
+          placeholder="Write your notes about this lesson..."
+          className="min-h-[80px] resize-y text-sm"
+        />
+      </div>
+    </div>
+  );
+}
+
 function DemoInlineContent({
   task,
   onMarkComplete,
   isCompleted,
+  courseId,
+  courseTitle,
 }: {
   task: DemoTask | null;
   onMarkComplete: () => void;
   isCompleted: boolean;
+  courseId?: string;
+  courseTitle?: string;
 }) {
   const [submissionText, setSubmissionText] = useState('');
 
@@ -403,9 +468,19 @@ function DemoInlineContent({
           </div>
         )}
 
+        {/* Notes + Favorite */}
+        <LessonNotesAndFavorite
+          taskId={task.id}
+          taskTitle={task.title}
+          courseId={courseId || ''}
+          courseTitle={courseTitle || ''}
+          phaseId={task.id.split('-').slice(0, 3).join('-')}
+          phaseTitle=""
+        />
+
         {/* Mark Complete */}
         {task.type !== 'form' && (
-          <div className="mt-8 flex justify-center">
+          <div className="mt-6 flex justify-center">
             {isCompleted ? (
               <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary/10 border border-primary/20">
                 <Check className="h-4 w-4 text-primary" />
@@ -937,6 +1012,8 @@ const CourseDetail = () => {
                 task={selectedDemoTask}
                 onMarkComplete={handleMarkComplete}
                 isCompleted={selectedTaskId ? demoCompletedTasks.has(selectedTaskId) : false}
+                courseId={courseId || ''}
+                courseTitle={courseTitle || ''}
               />
             </div>
           )}
@@ -1011,6 +1088,8 @@ const CourseDetail = () => {
                 task={selectedDemoTask}
                 onMarkComplete={handleMarkComplete}
                 isCompleted={selectedTaskId ? demoCompletedTasks.has(selectedTaskId) : false}
+                courseId={courseId || ''}
+                courseTitle={courseTitle || ''}
               />
             )}
 

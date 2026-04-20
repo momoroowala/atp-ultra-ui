@@ -1,0 +1,1 @@
+ALTER TABLE user_profiles RENAME COLUMN coach_id TO assigned_csm_id;

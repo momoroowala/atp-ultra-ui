@@ -1,0 +1,1 @@
+ALTER TABLE community_dm_conversations ADD COLUMN name text DEFAULT NULL;

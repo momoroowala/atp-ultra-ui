@@ -1,0 +1,1 @@
+UPDATE community_messages SET is_deleted = true, updated_at = now() WHERE channel_id = 'dfec1899-f285-4233-9383-2ca85f40de4b';

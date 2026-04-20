@@ -16,6 +16,11 @@ interface OnboardingStatus {
 }
 
 export const useOnboardingStatus = (): OnboardingStatus => {
+  // GitHub Pages: skip onboarding entirely
+  if (import.meta.env.BASE_URL !== '/') {
+    return { isOnboarding: false, isLoading: false, firstCourse: null, firstPhase: null, firstTaskId: null, completedTasks: 0, totalTasks: 0, progressPercent: 0 };
+  }
+
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: courses, isLoading: coursesLoading } = useCourses();

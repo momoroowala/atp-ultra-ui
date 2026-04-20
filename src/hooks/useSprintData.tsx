@@ -181,6 +181,11 @@ export const useSprintData = () => {
     cycleStatusMutation.mutate({ taskId, nextStatus });
   };
 
+  // Direct status setter for drag-and-drop
+  const setTaskStatus = (taskId: string, status: TaskStatus | 'not_started') => {
+    cycleStatusMutation.mutate({ taskId, nextStatus: status });
+  };
+
   // Derived helpers — only 'completed' counts toward progress
   const getPhaseTaskCount = (phaseId: string) =>
     tasks.filter(t => t.phase_id === phaseId).length;
@@ -201,6 +206,7 @@ export const useSprintData = () => {
     isLoading: phasesLoading || tasksLoading || completionsLoading,
     cycleStatus,
     toggleCompletion: cycleStatus,
+    setTaskStatus,
     getPhaseTaskCount,
     getPhaseCompletedCount,
     getTasksForPhase,

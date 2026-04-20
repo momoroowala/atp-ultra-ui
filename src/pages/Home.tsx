@@ -919,105 +919,111 @@ const Home = () => {
 
                 return (
               <div className={cn("rounded-xl border overflow-hidden", ts.bg, ts.border)}>
-                {/* Badges row inside banner, at the top */}
-                <TooltipProvider delayDuration={200}>
-                  <div className="flex items-center gap-1 px-4 pt-2.5 pb-1 overflow-x-auto overflow-y-visible scrollbar-hide">
-                    {earnedBadges.slice(0, 10).map((badge) => (
-                      <Tooltip key={badge.user_badge_id}>
-                        <TooltipTrigger asChild>
-                          <motion.div whileHover={{ scale: 1.15, y: -2 }} className="relative flex items-center justify-center h-8 w-8 shrink-0 cursor-pointer" onClick={() => setBadgesModalOpen(true)}>
-                            <div className="absolute inset-0 rounded-md bg-gradient-to-b from-yellow-300/30 via-amber-400/20 to-yellow-600/30 border border-yellow-500/40" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} />
-                            <span className="relative text-base drop-shadow-sm">{badge.icon_emoji || "\uD83C\uDFC6"}</span>
-                          </motion.div>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="z-[9999] bg-popover border shadow-lg" sideOffset={4}><p className="text-[10px] font-semibold">{badge.badge_name}</p></TooltipContent>
-                      </Tooltip>
-                    ))}
-                    {demoAwardedBadges.filter((bk) => !earnedBadges.some((eb) => eb.badge_key === bk)).map((bk) => {
-                      const badge = allBadges.find((b) => b.badge_key === bk);
-                      if (!badge) return null;
-                      return (
-                        <Tooltip key={`demo-${bk}`}>
-                          <TooltipTrigger asChild>
-                            <motion.div whileHover={{ scale: 1.15, y: -2 }} className="relative group flex items-center justify-center h-8 w-8 shrink-0 cursor-pointer" onClick={() => setBadgesModalOpen(true)}>
-                              <div className="absolute inset-0 rounded-md bg-gradient-to-b from-emerald-300/30 via-green-400/20 to-emerald-600/30 border border-emerald-500/40" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} />
-                              <span className="relative text-base drop-shadow-sm">{badge.icon_emoji || "\uD83C\uDFC6"}</span>
-                              <button onClick={(e) => { e.stopPropagation(); handleRemoveDemoBadge(bk); }} className="absolute -top-0.5 -right-0.5 hidden group-hover:flex items-center justify-center h-3 w-3 rounded-full bg-red-500 text-white z-10"><X className="h-2 w-2" /></button>
-                            </motion.div>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="z-[9999] bg-popover border shadow-lg" sideOffset={4}><p className="text-[10px] font-semibold">{badge.badge_name}</p></TooltipContent>
-                        </Tooltip>
-                      );
-                    })}
-                    {lockedBadges.filter((b) => !demoAwardedBadges.includes(b.badge_key)).slice(0, Math.max(0, 5 - earnedBadges.length - demoAwardedBadges.length)).map((badge) => (
-                      <Tooltip key={badge.id}>
-                        <TooltipTrigger asChild>
-                          <div className="relative flex items-center justify-center h-8 w-8 shrink-0 opacity-25">
-                            <div className="absolute inset-0 rounded-md bg-muted/60 border border-border/40" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} />
-                            <Lock className="relative h-2 w-2 text-muted-foreground" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="z-[9999] bg-popover border shadow-lg" sideOffset={4}><p className="text-[10px] text-muted-foreground">{badge.badge_name}</p></TooltipContent>
-                      </Tooltip>
-                    ))}
-                    {isStaff && (
-                      <button onClick={() => setAwardDialogOpen(true)} className="flex items-center justify-center h-5 w-5 rounded-full border border-dashed border-primary/30 hover:border-primary hover:bg-primary/10 transition-all shrink-0 ml-0.5">
-                        <Plus className="h-2.5 w-2.5 text-primary" />
-                      </button>
-                    )}
-                  </div>
-                </TooltipProvider>
+                {/* Main bar: three balanced columns with badges inline */}
+                <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-5 px-5 py-5">
 
-                {/* Main bar: three balanced columns */}
-                <div className="flex items-center justify-evenly gap-4 px-5 pb-5 pt-3">
-
-                {/* LEFT: Fire streak + Greeting */}
+                {/* LEFT: Greeting with badges adorning the name */}
                 <div className="flex items-center gap-4">
+                  {/* Streak icon */}
                   {currentStreak > 0 ? (
-                    <div
-                      className="relative inline-flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-br from-orange-400/20 to-amber-500/10 border-2 border-orange-400/30 shrink-0"
+                    <motion.div
+                      initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}
+                      className="relative inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-gradient-to-br from-orange-400/25 to-amber-500/15 border-2 border-orange-400/40 shrink-0 shadow-sm"
                       style={{ animation: "fireGlow 2s ease-in-out infinite" }}
                     >
                       <span className="text-3xl leading-none">{"\uD83D\uDD25"}</span>
-                      <span className="absolute -bottom-1 text-xs font-extrabold text-orange-500 dark:text-orange-400 bg-background/80 rounded-full px-2 py-0.5">
+                      <span className="absolute -bottom-1.5 text-[11px] font-extrabold text-orange-500 dark:text-orange-400 bg-background/90 rounded-full px-2 py-0.5 shadow-sm border border-orange-400/20">
                         {currentStreak}
                       </span>
-                    </div>
+                    </motion.div>
                   ) : (
-                    <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/50 border border-border/40 shrink-0">
-                      <Flame className="h-6 w-6 text-muted-foreground" />
+                    <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-muted/50 border border-border/40 shrink-0">
+                      <Flame className="h-7 w-7 text-muted-foreground" />
                     </div>
                   )}
-                  <div>
-                    <h1 className="text-2xl font-bold text-foreground leading-tight">
-                      Welcome back, {profile?.first_name || "there"}
-                    </h1>
+
+                  {/* Name + badges + subtitle */}
+                  <div className="min-w-0 flex-1">
+                    {/* Name row with badges trailing */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h1 className="text-2xl font-bold text-foreground leading-tight">
+                        {profile?.first_name || "Welcome back"}
+                      </h1>
+                      {/* Badges adorning the name */}
+                      <TooltipProvider delayDuration={200}>
+                        <div className="flex items-center gap-0.5 overflow-x-auto overflow-y-visible scrollbar-hide">
+                          {earnedBadges.slice(0, 10).map((badge) => (
+                            <Tooltip key={badge.user_badge_id}>
+                              <TooltipTrigger asChild>
+                                <motion.div whileHover={{ scale: 1.2, y: -3 }} className="relative flex items-center justify-center h-7 w-7 shrink-0 cursor-pointer" onClick={() => setBadgesModalOpen(true)}>
+                                  <div className="absolute inset-0 rounded-md bg-gradient-to-b from-yellow-300/30 via-amber-400/20 to-yellow-600/30 border border-yellow-500/40" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} />
+                                  <span className="relative text-sm drop-shadow-sm">{badge.icon_emoji || "\uD83C\uDFC6"}</span>
+                                </motion.div>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="z-[9999] bg-popover border shadow-lg" sideOffset={4}><p className="text-[10px] font-semibold">{badge.badge_name}</p></TooltipContent>
+                            </Tooltip>
+                          ))}
+                          {demoAwardedBadges.filter((bk) => !earnedBadges.some((eb) => eb.badge_key === bk)).map((bk) => {
+                            const badge = allBadges.find((b) => b.badge_key === bk);
+                            if (!badge) return null;
+                            return (
+                              <Tooltip key={`demo-${bk}`}>
+                                <TooltipTrigger asChild>
+                                  <motion.div whileHover={{ scale: 1.2, y: -3 }} className="relative group flex items-center justify-center h-7 w-7 shrink-0 cursor-pointer" onClick={() => setBadgesModalOpen(true)}>
+                                    <div className="absolute inset-0 rounded-md bg-gradient-to-b from-emerald-300/30 via-green-400/20 to-emerald-600/30 border border-emerald-500/40" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} />
+                                    <span className="relative text-sm drop-shadow-sm">{badge.icon_emoji || "\uD83C\uDFC6"}</span>
+                                    <button onClick={(e) => { e.stopPropagation(); handleRemoveDemoBadge(bk); }} className="absolute -top-0.5 -right-0.5 hidden group-hover:flex items-center justify-center h-3 w-3 rounded-full bg-red-500 text-white z-10"><X className="h-2 w-2" /></button>
+                                  </motion.div>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="z-[9999] bg-popover border shadow-lg" sideOffset={4}><p className="text-[10px] font-semibold">{badge.badge_name}</p></TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                          {lockedBadges.filter((b) => !demoAwardedBadges.includes(b.badge_key)).slice(0, Math.max(0, 3 - earnedBadges.length - demoAwardedBadges.length)).map((badge) => (
+                            <Tooltip key={badge.id}>
+                              <TooltipTrigger asChild>
+                                <div className="relative flex items-center justify-center h-7 w-7 shrink-0 opacity-20">
+                                  <div className="absolute inset-0 rounded-md bg-muted/60 border border-border/40" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} />
+                                  <Lock className="relative h-2 w-2 text-muted-foreground" />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="z-[9999] bg-popover border shadow-lg" sideOffset={4}><p className="text-[10px] text-muted-foreground">{badge.badge_name}</p></TooltipContent>
+                            </Tooltip>
+                          ))}
+                          {isStaff && (
+                            <button onClick={() => setAwardDialogOpen(true)} className="flex items-center justify-center h-5 w-5 rounded-full border border-dashed border-primary/30 hover:border-primary hover:bg-primary/10 transition-all shrink-0 ml-0.5">
+                              <Plus className="h-2.5 w-2.5 text-primary" />
+                            </button>
+                          )}
+                        </div>
+                      </TooltipProvider>
+                    </div>
+                    {/* Subtitle */}
                     <p className="text-sm text-muted-foreground mt-1">
                       {currentStreak > 0
-                        ? `${currentStreak}-day streak! Keep it going.`
+                        ? `${currentStreak}-day streak! You're on fire.`
                         : "Start a streak by logging in daily."}
                     </p>
                   </div>
                 </div>
 
-                {/* CENTER: Date + nudge in calendar card */}
-                <div className="hidden md:flex flex-col items-center shrink-0">
-                  <div className="rounded-xl border border-border/40 bg-card/60 shadow-sm overflow-hidden min-w-[220px]">
-                    {/* Red top strip like a real calendar */}
-                    <div className="h-2 bg-gradient-to-r from-red-500 to-red-400" />
-                    <div className="px-5 py-3 flex flex-col items-center gap-1.5">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                {/* CENTER: Date + nudge -- bigger, more visual */}
+                <div className="hidden md:flex flex-col items-center">
+                  <div className="rounded-xl border border-border/40 bg-card/60 shadow-md overflow-hidden w-full max-w-[280px]">
+                    <div className="h-2.5 bg-gradient-to-r from-red-500 via-red-400 to-rose-400" />
+                    <div className="px-6 py-4 flex flex-col items-center gap-1">
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
                         {format(new Date(), "EEEE")}
                       </p>
-                      <p className="text-3xl font-extrabold text-foreground leading-none">
+                      <p className="text-5xl font-extrabold text-foreground leading-none">
                         {format(new Date(), "d")}
                       </p>
-                      <p className="text-sm font-semibold text-foreground/80">
+                      <p className="text-base font-semibold text-foreground/80">
                         {format(new Date(), "MMMM yyyy")}
                       </p>
                     </div>
-                    <div className="px-4 pb-3 pt-0">
-                      <p className="text-xs text-muted-foreground italic text-center">
+                    <div className="px-5 pb-3 pt-0">
+                      <p className="text-xs text-muted-foreground italic text-center leading-relaxed">
                     {(() => {
                       const dow = new Date().getDay();
                       const nudges: Record<number, string[]> = {
@@ -1037,35 +1043,62 @@ const Home = () => {
                   </div>
                 </div>
 
-                {/* Right: Activity feed -- fills remaining space */}
-                <div className="hidden md:flex flex-col gap-1.5 rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm px-4 py-3 overflow-hidden max-w-[380px]">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Zap className="h-4 w-4 text-amber-500 shrink-0" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Live Activity</span>
+                {/* Right: Upcoming calls -- compact container, bigger text */}
+                <div className="hidden md:flex flex-col gap-1.5 rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm px-3 py-2.5 overflow-hidden">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Video className="h-3.5 w-3.5 text-cyan-500 shrink-0" />
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Upcoming Calls</span>
                   </div>
-                  <AnimatePresence mode="popLayout">
-                    {visibleActivities.map((activity, i) => (
-                      <motion.div
-                        key={activity.name + activity.action}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.3, delay: i * 0.05 }}
-                        className="flex items-center gap-2.5 min-w-0 py-1"
-                      >
-                        <div className="flex items-center justify-center h-7 w-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white text-[10px] font-bold shrink-0">
-                          {activity.name.split(" ").map((n: string) => n[0]).join("")}
+                  {upcomingCalls.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2">No upcoming calls scheduled</p>
+                  ) : (
+                    upcomingCalls.slice(0, 3).map((call: any) => {
+                      const callDate = parseISO(call.call_date);
+                      const dateLabel = isToday(callDate) ? "Today" : isTomorrow(callDate) ? "Tomorrow" : format(callDate, "EEE, MMM d");
+                      const timeLabel = call.call_time?.slice(0, 5) || "";
+                      const rsvpStatus = user?.id ? getDemoRsvpStatus(call.id, user.id) : null;
+                      const isLive = isToday(callDate) && (() => {
+                        if (!call.call_time) return false;
+                        const [h, m] = call.call_time.split(":").map(Number);
+                        const start = new Date(callDate); start.setHours(h, m, 0, 0);
+                        return Date.now() >= start.getTime() - 1800000 && Date.now() <= start.getTime() + 7200000;
+                      })();
+
+                      return (
+                        <div
+                          key={call.id}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border/30 bg-background/50 hover:border-primary/30 transition-colors cursor-pointer"
+                          onClick={() => { setSelectedCallForModal(call); setShowCallModal(true); }}
+                        >
+                          <div className={cn(
+                            "flex items-center justify-center h-9 w-9 rounded-lg shrink-0",
+                            isLive ? "bg-emerald-500/15" : "bg-cyan-500/10"
+                          )}>
+                            {isLive ? <Play className="h-4 w-4 text-emerald-500" /> : <Video className="h-4 w-4 text-cyan-500" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[15px] font-semibold text-foreground truncate leading-tight">{call.title}</p>
+                            <p className="text-xs text-muted-foreground">{dateLabel} {timeLabel && `at ${timeLabel}`}</p>
+                          </div>
+                          {isLive ? (
+                            <Button size="sm" className="shrink-0 h-7 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-semibold" onClick={(e) => { e.stopPropagation(); window.open(call.call_link || '#', '_blank'); }}>
+                              Join
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant={rsvpStatus === "yes" ? "default" : "outline"}
+                              className={cn("shrink-0 h-7 px-3 text-xs rounded-md font-semibold", rsvpStatus !== "yes" && "border-cyan-500/30 text-cyan-600 dark:text-cyan-400")}
+                              onClick={(e) => { e.stopPropagation(); rsvpMutation.mutate({ callId: call.id, status: rsvpStatus === "yes" ? "no" : "yes" }); }}
+                              disabled={rsvpMutation.isPending}
+                            >
+                              {rsvpStatus === "yes" ? "RSVP'd" : "RSVP"}
+                            </Button>
+                          )}
                         </div>
-                        <p className="text-xs text-foreground truncate flex-1">
-                          <span className="font-semibold">{activity.name}</span>{" "}
-                          <span className="text-muted-foreground">{activity.action}</span>
-                        </p>
-                        <span className="text-[10px] text-muted-foreground shrink-0">
-                          {activity.time}
-                        </span>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
+                      );
+                    })
+                  )}
                 </div>
               </div>
               </div>
@@ -1073,103 +1106,7 @@ const Home = () => {
               })()}
             </motion.div>
 
-            {/* -------------------------------------------------------- */}
-            {/*  2. Calendar week strip                                  */}
-            {/* -------------------------------------------------------- */}
-            {/* Thin calendar week strip + upcoming events */}
-            <motion.div variants={itemVariants}>
-              <div className="flex items-center gap-3">
-                {/* Day letter headers + day cells -- inline thin strip */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-0">
-                    {Array.from({ length: 7 }, (_, i) => {
-                      const today = new Date();
-                      const monday = new Date(today);
-                      monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-                      const day = new Date(monday);
-                      day.setDate(monday.getDate() + i);
-                      const dayLetter = ["M","T","W","T","F","S","S"][i];
-                      const dayNum = format(day, "d");
-                      const dayStr = format(day, "yyyy-MM-dd");
-                      const hasEvent = upcomingCalls.some((c: any) => c.call_date === dayStr);
-                      const isCurrent = isToday(day);
-                      const isPast = day < new Date(new Date().toDateString());
-                      return (
-                        <div
-                          key={i}
-                          className={cn(
-                            "flex flex-col items-center flex-1 py-1 border-r border-border/15 last:border-r-0",
-                            isCurrent ? "bg-primary/8" : isPast ? "opacity-40" : ""
-                          )}
-                        >
-                          <span className="text-[8px] font-semibold text-muted-foreground/50 uppercase">{dayLetter}</span>
-                          <span className={cn(
-                            "text-[11px] font-bold leading-none mt-0.5",
-                            isCurrent ? "bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-[10px]" : "text-foreground"
-                          )}>{dayNum}</span>
-                          {hasEvent && (
-                            <div className={cn("h-1 w-1 rounded-full mt-0.5", isCurrent ? "bg-primary" : "bg-cyan-500")} />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Upcoming events with RSVP */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {upcomingCalls.slice(0, 3).map((call: any) => {
-                    const callDate = parseISO(call.call_date);
-                    const dateLabel = isToday(callDate) ? "Today" : isTomorrow(callDate) ? "Tomorrow" : format(callDate, "EEE, MMM d");
-                    const timeLabel = call.call_time?.slice(0, 5) || "";
-                    const rsvpStatus = user?.id ? getDemoRsvpStatus(call.id, user.id) : null;
-                    const isLive = isToday(callDate) && (() => {
-                      if (!call.call_time) return false;
-                      const [h, m] = call.call_time.split(":").map(Number);
-                      const start = new Date(callDate); start.setHours(h, m, 0, 0);
-                      return Date.now() >= start.getTime() - 1800000 && Date.now() <= start.getTime() + 7200000;
-                    })();
-
-                    return (
-                      <div
-                        key={call.id}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border/30 bg-card/60 hover:border-primary/30 transition-colors cursor-pointer shrink-0"
-                        onClick={() => {
-                          setSelectedCallForModal(call);
-                          setShowCallModal(true);
-                        }}
-                      >
-                        <div className={cn(
-                          "flex items-center justify-center h-7 w-7 rounded-md shrink-0",
-                          isLive ? "bg-emerald-500/15" : "bg-cyan-500/10"
-                        )}>
-                          {isLive ? <Play className="h-3.5 w-3.5 text-emerald-500" /> : <Video className="h-3.5 w-3.5 text-cyan-500" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-foreground truncate max-w-[120px]">{call.title}</p>
-                          <p className="text-[10px] text-muted-foreground">{dateLabel} {timeLabel}</p>
-                        </div>
-                        {isLive ? (
-                          <Button size="sm" className="shrink-0 h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-md" onClick={(e) => { e.stopPropagation(); window.open(call.call_link || '#', '_blank'); }}>
-                            Join
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant={rsvpStatus === "yes" ? "default" : "outline"}
-                            className={cn("shrink-0 h-6 px-2 text-[10px] rounded-md", rsvpStatus !== "yes" && "border-cyan-500/30 text-cyan-600 dark:text-cyan-400")}
-                            onClick={(e) => { e.stopPropagation(); rsvpMutation.mutate({ callId: call.id, status: rsvpStatus === "yes" ? "no" : "yes" }); }}
-                            disabled={rsvpMutation.isPending}
-                          >
-                            {rsvpStatus === "yes" ? "RSVP'd" : "RSVP"}
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </motion.div>
+            {/* Calendar week strip removed -- upcoming calls now in top-right card */}
 
             {/* -------------------------------------------------------- */}
             {/*  AMAZON REVENUE SNAPSHOT                                 */}

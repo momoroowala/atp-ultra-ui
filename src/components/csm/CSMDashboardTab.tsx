@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,10 +14,14 @@ import { useCSMMetrics, useCSMOutreachStatus, useMissedOnboarding } from '@/hook
 import { useUnreadCounts } from '@/hooks/useUnreadCounts';
 import { useNavigate } from 'react-router-dom';
 
-import { OutreachEffectivenessCard, TrackingRow, WeeklyActivityCard, CourseBottleneckCard, CallAttendanceCard } from './MiniChartGrid';
+import {
+  OutreachEffectivenessCard, TrackingRow, WeeklyActivityCard, CourseBottleneckCard, CallAttendanceCard,
+  RevenueAtRiskCard, NPSScoreCard, FirstSaleConversionCard, CommunityEngagementCard, SummaryStatCard,
+} from './MiniChartGrid';
 import { CSMDashboardFilters, type CSMDashboardFilterValues } from './CSMDashboardFilters';
 import { PriorityBanner } from './PriorityBanner';
 import { CSMDetailDialog } from './CSMDetailDialog';
+import { differenceInDays } from 'date-fns';
 
 interface CSMDashboardTabProps {
   onNavigateToStudents?: () => void;
@@ -333,49 +337,119 @@ function RecentWinsSection({ wins, navigate }: { wins: any[]; navigate: ReturnTy
 }
 
 /* ─────────────────────────────────────────────────────────
-   Shared: Insight Cards in 2x2 Grid
+   Shared: Insight Cards with Category Tabs (2x2 per tab)
    ───────────────────────────────────────────────────────── */
-function InsightsGrid({
-  contactedCount,
-  reEngagedCount,
-  wau,
-  setOpenDetail,
-}: {
+type InsightTab = 'activity' | 'financial' | 'engagement';
+
+interface InsightsGridTabbedProps {
   contactedCount: number;
   reEngagedCount: number;
   wau: number;
   setOpenDetail: (v: string | null) => void;
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      <OutreachEffectivenessCard contactedCount={contactedCount} reEngagedFromOutreach={reEngagedCount} />
-      <WeeklyActivityCard wau={wau} />
-      <CourseBottleneckCard stuckStudents={0} onClick={() => setOpenDetail('course_bottleneck')} />
-      <CallAttendanceCard />
-    </div>
-  );
+  metrics: ReturnType<typeof useCSMMetrics>;
 }
 
-/* ─────────────────────────────────────────────────────────
-   Shared: Insight Cards Stacked
-   ───────────────────────────────────────────────────────── */
-function InsightsStacked({
+function InsightsGridTabbed({
   contactedCount,
   reEngagedCount,
   wau,
   setOpenDetail,
-}: {
-  contactedCount: number;
-  reEngagedCount: number;
-  wau: number;
-  setOpenDetail: (v: string | null) => void;
-}) {
+  metrics,
+}: InsightsGridTabbedProps) {
+  const [tab, setTab] = useState<InsightTab>('activity');
+
+  const tabs: { key: InsightTab; label: string }[] = [
+    { key: 'activity', label: 'Activity' },
+    { key: 'financial', label: 'Financial' },
+    { key: 'engagement', label: 'Engagement' },
+  ];
+
+  const fmt = (n: number) => n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n}`;
+
   return (
-    <div className="flex flex-col gap-3 [&>div]:min-h-[140px]">
-      <OutreachEffectivenessCard contactedCount={contactedCount} reEngagedFromOutreach={reEngagedCount} />
-      <WeeklyActivityCard wau={wau} />
-      <CourseBottleneckCard stuckStudents={0} onClick={() => setOpenDetail('course_bottleneck')} />
-      <CallAttendanceCard />
+    <div>
+      <div className="flex items-center gap-1 mb-2 bg-muted/40 rounded-md p-0.5 w-fit">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all ${
+              tab === t.key
+                ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {tab === 'activity' && (
+          <>
+            <OutreachEffectivenessCard contactedCount={contactedCount} reEngagedFromOutreach={reEngagedCount} />
+            <WeeklyActivityCard wau={wau} dailyActiveUsers={metrics.dailyActiveUsers} />
+            <CourseBottleneckCard
+              stuckStudents={metrics.stuckStudents}
+              bottleneckPhase={metrics.bottleneckPhase}
+              phaseDropOff={metrics.phaseDropOff}
+              onClick={() => setOpenDetail('course_bottleneck')}
+            />
+            <CallAttendanceCard />
+          </>
+        )}
+        {tab === 'financial' && (
+          <>
+            <RevenueAtRiskCard
+              revenueAtRisk={metrics.revenueAtRisk}
+              totalPortfolioValue={metrics.totalPortfolioValue}
+              atRiskCount={metrics.atRisk.length + metrics.deadOnArrival.length}
+              onClick={() => setOpenDetail('revenue_at_risk')}
+            />
+            <FirstSaleConversionCard
+              conversionRate={metrics.firstSaleConversionRate}
+              firstSaleCount={metrics.firstSaleCount}
+              totalStudents={metrics.totalUsers}
+              onClick={() => setOpenDetail('first_sale')}
+            />
+            <SummaryStatCard
+              label="Portfolio Value"
+              value={fmt(metrics.totalPortfolioValue)}
+              subtitle="total active student revenue"
+              color="text-emerald-600"
+            />
+            <SummaryStatCard
+              label="Avg Student Revenue"
+              value={fmt(metrics.avgStudentRevenue)}
+              subtitle="per active student"
+            />
+          </>
+        )}
+        {tab === 'engagement' && (
+          <>
+            <NPSScoreCard
+              npsScore={metrics.npsScore}
+              npsBreakdown={metrics.npsBreakdown}
+              onClick={() => setOpenDetail('nps_detail')}
+            />
+            <CommunityEngagementCard
+              engagementRate={metrics.communityEngagementRate}
+              onClick={() => setOpenDetail('community_engagement')}
+            />
+            <SummaryStatCard
+              label="Avg Calendar Attendance"
+              value={`${metrics.avgCalendarAttendance}%`}
+              subtitle="across active students"
+              color={metrics.avgCalendarAttendance >= 60 ? 'text-emerald-600' : metrics.avgCalendarAttendance >= 30 ? 'text-amber-600' : 'text-red-600'}
+            />
+            <SummaryStatCard
+              label="Completion Velocity"
+              value={`${metrics.avgCompletionVelocityDays}d`}
+              subtitle="avg days per phase"
+              color={metrics.avgCompletionVelocityDays <= 14 ? 'text-emerald-600' : metrics.avgCompletionVelocityDays <= 30 ? 'text-amber-600' : 'text-red-600'}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -442,9 +516,126 @@ export function CSMDashboardTab({ onNavigateToStudents }: CSMDashboardTabProps) 
   const { data: outreachData, upsertStatus } = useCSMOutreachStatus();
   const { data: missedOnboardingData } = useMissedOnboarding();
 
-  const students = usersData?.users || [];
+  // Demo students fallback when Supabase returns empty
+  const demoUsersData = useMemo(() => {
+    if (usersData?.users && usersData.users.length > 0) return usersData;
+
+    // Deterministic pseudo-random from index (no Math.random)
+    const dseed = (i: number) => ((i * 2654435761) >>> 0) % 1000;
+
+    const names = [
+      ['Sarah','Chen'],['Marcus','Rivera'],['Jordan','Williams'],['Priya','Patel'],['Tyler','Brooks'],
+      ['Aisha','Johnson'],['David','Kim'],['Emma','Thompson'],['Alex','Morgan'],['Nina','Sato'],
+      ['Liam','Garcia'],['Sophia','Martinez'],['Ethan','Lee'],['Olivia','Brown'],['Mason','Taylor'],
+      ['Isabella','Anderson'],['Logan','Thomas'],['Mia','Jackson'],['James','White'],['Ava','Wilson'],
+      ['Benjamin','Harris'],['Charlotte','Clark'],['Jacob','Lewis'],['Amelia','Robinson'],['Michael','Walker'],
+      ['Harper','Hall'],['Daniel','Allen'],['Evelyn','Young'],['Sebastian','King'],['Abigail','Wright'],
+      ['Henry','Lopez'],['Emily','Hill'],['Owen','Scott'],['Ella','Green'],['Jack','Adams'],
+      ['Scarlett','Baker'],['Lucas','Nelson'],['Grace','Carter'],['Aiden','Mitchell'],['Chloe','Roberts'],
+      ['Samuel','Turner'],['Zoey','Phillips'],['Joseph','Campbell'],['Lily','Parker'],['John','Evans'],
+      ['Hannah','Edwards'],['Ryan','Collins'],['Aria','Stewart'],['Luke','Morris'],['Riley','Murphy'],
+    ];
+    const tiers = ['Elite','Ultimate','Platinum','Elite','STB','Elite','Ultimate','STB','Platinum','STB','STB','STB','Elite','STB','STB','Ultimate','STB','Elite','STB','Platinum','STB','STB','Elite','STB','Ultimate','STB','STB','Elite','STB','STB','STB','Elite','STB','STB','Ultimate','STB','STB','Elite','STB','STB','STB','Elite','STB','STB','STB','STB','Elite','STB','STB','STB'];
+    const phaseNames = ['Product Research', 'Sourcing', 'Listing & Launch', 'Scale & Optimize'];
+    const tierRevenue: Record<string, [number, number]> = {
+      STB: [0, 5000], Elite: [2000, 12000], Ultimate: [5000, 25000], Platinum: [10000, 50000],
+    };
+    const now = Date.now();
+    const day = 86400000;
+    const totalTasks = 24;
+
+    const users = names.map(([fn, ln], i) => {
+      const s = dseed(i);
+      const s2 = dseed(i + 100);
+      const s3 = dseed(i + 200);
+
+      // Activity tiers: 0-4 stars, 5-14 solid, 15-29 nudge, 30-39 at-risk, 40-49 DOA/never
+      const daysAgo = i < 5 ? (s % 2) : i < 15 ? (s % 6) + 1 : i < 30 ? 7 + (s % 18) : i < 40 ? 14 + (s % 50) : null;
+      const lastSignInAt = daysAgo !== null ? new Date(now - daysAgo * day).toISOString() : null;
+
+      // Progress follows activity tiers
+      const progress = i < 5 ? 60 + (s % 36) : i < 15 ? 30 + (s % 35) : i < 30 ? 8 + (s % 25) : i < 40 ? (s % 12) : 0;
+
+      const completedTasks = Math.round(totalTasks * progress / 100);
+      const currentPhase = progress >= 75 ? 4 : progress >= 50 ? 3 : progress >= 25 ? 2 : 1;
+      const tier = tiers[i] || 'STB';
+      const [revMin, revMax] = tierRevenue[tier] || [0, 5000];
+      const revenue = Math.round(revMin + (s2 / 1000) * (revMax - revMin));
+      const joinedDate = new Date(now - (30 + (s % 90)) * day).toISOString();
+      const isActive = daysAgo !== null && daysAgo < 30;
+
+      // NPS: stars 9-10, solid 7-8, nudge 5-7, at-risk 2-5, DOA null
+      const npsScore = i < 5 ? 9 + (s % 2) : i < 15 ? 7 + (s % 2) : i < 30 ? 5 + (s % 3) : i < 40 ? 2 + (s % 4) : null;
+
+      // Community: stars 10-30, solid 3-15, nudge 0-5, at-risk 0-1, DOA 0
+      const communityPostCount = i < 5 ? 10 + (s2 % 21) : i < 15 ? 3 + (s2 % 13) : i < 30 ? (s2 % 6) : i < 40 ? (s2 % 2) : 0;
+
+      // Calendar attendance: stars 80-100, solid 50-90, nudge 10-50, at-risk 0-20, DOA 0
+      const calendarAttendance = i < 5 ? 80 + (s3 % 21) : i < 15 ? 50 + (s3 % 41) : i < 30 ? 10 + (s3 % 41) : i < 40 ? (s3 % 21) : 0;
+
+      // Support tickets: inversely correlated with progress
+      const supportTicketCount = i < 5 ? (s3 % 2) : i < 15 ? (s3 % 3) : i < 30 ? 1 + (s3 % 3) : i < 40 ? 2 + (s3 % 4) : 0;
+
+      // First sale: only top performers (0-9) and some solid (10-14)
+      const hasFirstSale = i < 5 || (i < 12 && s2 % 3 === 0);
+      const firstSaleDate = hasFirstSale ? new Date(now - (5 + (s % 30)) * day).toISOString() : null;
+      const firstSaleAmount = hasFirstSale ? 50 + (s2 % 1951) : null;
+
+      // Cohort week: distributed across 8 weeks
+      const cohortWeek = 1 + (i % 8);
+
+      // Overdue tasks for at-risk students
+      const overdueTasks = i < 15 ? 0 : i < 30 ? (s % 3) : i < 40 ? 1 + (s % 3) : 0;
+
+      return {
+        id: `demo-student-${i}`,
+        firstName: fn,
+        lastName: ln,
+        email: `${fn.toLowerCase()}@student.dev`,
+        lastSignInAt,
+        progressPercentage: progress,
+        tier,
+        isActive,
+        daysInactive: daysAgo !== null ? daysAgo : undefined,
+        completedTasks,
+        totalTasks,
+        revenue,
+        joinedDate,
+        currentPhase,
+        currentPhaseName: phaseNames[currentPhase - 1],
+        npsScore,
+        communityPostCount,
+        calendarAttendance,
+        supportTicketCount,
+        firstSaleDate,
+        firstSaleAmount,
+        cohortWeek,
+        overdueTasks,
+      };
+    });
+
+    // Seed demo RSVP data for Call Attendance card (once)
+    if (!localStorage.getItem('demo_call_rsvps_seeded')) {
+      const rsvps: Record<string, Record<string, 'yes' | 'no'>> = {};
+      ['demo-call-weekly-1','demo-call-weekly-2','demo-call-weekly-3','demo-call-qa-1','demo-call-qa-2'].forEach((callId, ci) => {
+        rsvps[callId] = {};
+        users.forEach((u, ui) => {
+          const r = dseed(ui * 5 + ci + 300);
+          if (r % 100 < 70) {
+            rsvps[callId][u.id] = r % 100 < 50 ? 'yes' : 'no';
+          }
+        });
+      });
+      localStorage.setItem('demo_call_rsvps', JSON.stringify(rsvps));
+      localStorage.setItem('demo_call_rsvps_seeded', '1');
+    }
+
+    return { users, totalCount: users.length };
+  }, [usersData]);
+
+  const students = demoUsersData?.users || [];
   const activeMissedOnboarding = missedOnboardingData || [];
-  const metrics = useCSMMetrics(usersData);
+  const metrics = useCSMMetrics(demoUsersData);
 
   const outreachMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -458,10 +649,32 @@ export function CSMDashboardTab({ onNavigateToStudents }: CSMDashboardTabProps) 
     await upsertStatus(userId, metricType, status);
   }, [upsertStatus]);
 
+  // Demo outreach: students inactive 7+ days = "contacted", those who came back within 3 days = "re-engaged"
+  const demoOutreach = useMemo(() => {
+    const now = new Date();
+    const contacted = students.filter((s: any) => {
+      if (!s.lastSignInAt) return false;
+      return differenceInDays(now, new Date(s.lastSignInAt)) >= 7;
+    });
+    const reEngagedFromOutreach = students.filter((s: any) => {
+      if (!s.lastSignInAt) return false;
+      const d = differenceInDays(now, new Date(s.lastSignInAt));
+      return d >= 0 && d <= 3 && (s.progressPercentage || 0) > 0 && (s.progressPercentage || 0) < 40;
+    });
+    return { contactedCount: contacted.length, reEngagedFromOutreach: reEngagedFromOutreach.length };
+  }, [students]);
+
   const contactedCount = useMemo(() => {
     const pendingStatuses = new Set(['follow_up_required', 'no_action']);
-    return Object.values(outreachMap).filter(s => s && !pendingStatuses.has(s)).length;
-  }, [outreachMap]);
+    const fromOutreach = Object.values(outreachMap).filter(s => s && !pendingStatuses.has(s)).length;
+    // Use demo outreach data when no real outreach exists
+    return fromOutreach > 0 ? fromOutreach : demoOutreach.contactedCount;
+  }, [outreachMap, demoOutreach]);
+
+  const reEngagedFromOutreach = useMemo(() => {
+    const fromOutreach = Object.values(outreachMap).filter(s => s === 'resolved').length;
+    return fromOutreach > 0 ? fromOutreach : demoOutreach.reEngagedFromOutreach;
+  }, [outreachMap, demoOutreach]);
 
   const userLookup = useMemo(() => {
     const map: Record<string, { firstName: string; lastName: string }> = {};
@@ -651,11 +864,12 @@ export function CSMDashboardTab({ onNavigateToStudents }: CSMDashboardTabProps) 
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-foreground mb-3">Today's Insights</h3>
-                    <InsightsGrid
+                    <InsightsGridTabbed
                       contactedCount={contactedCount}
-                      reEngagedCount={metrics.reEngagedCount}
+                      reEngagedCount={reEngagedFromOutreach}
                       wau={metrics.wau}
                       setOpenDetail={setOpenDetail}
+                      metrics={metrics}
                     />
                   </div>
                 </div>
@@ -761,14 +975,15 @@ export function CSMDashboardTab({ onNavigateToStudents }: CSMDashboardTabProps) 
                     maxHeight="480px"
                   />
 
-                  {/* Col 2: Today's Insights 2x2 */}
+                  {/* Col 2: Today's Insights with tabs */}
                   <div>
                     <h3 className="text-sm font-semibold text-foreground mb-3">Today's Insights</h3>
-                    <InsightsGrid
+                    <InsightsGridTabbed
                       contactedCount={contactedCount}
-                      reEngagedCount={metrics.reEngagedCount}
+                      reEngagedCount={reEngagedFromOutreach}
                       wau={metrics.wau}
                       setOpenDetail={setOpenDetail}
+                      metrics={metrics}
                     />
                   </div>
 
@@ -863,11 +1078,12 @@ export function CSMDashboardTab({ onNavigateToStudents }: CSMDashboardTabProps) 
                     >
                       <div>
                         <h3 className="text-sm font-semibold text-foreground mb-3">Today's Insights</h3>
-                        <InsightsGrid
+                        <InsightsGridTabbed
                           contactedCount={contactedCount}
-                          reEngagedCount={metrics.reEngagedCount}
+                          reEngagedCount={reEngagedFromOutreach}
                           wau={metrics.wau}
                           setOpenDetail={setOpenDetail}
+                          metrics={metrics}
                         />
                       </div>
                     </motion.div>

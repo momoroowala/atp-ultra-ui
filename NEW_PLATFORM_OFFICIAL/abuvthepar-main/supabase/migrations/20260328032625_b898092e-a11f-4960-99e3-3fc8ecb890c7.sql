@@ -1,0 +1,1 @@
+UPDATE roles SET page_visibility = jsonb_set(page_visibility::jsonb, '{support_tickets}', 'false') WHERE role_key = 'admin';

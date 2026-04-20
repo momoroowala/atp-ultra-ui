@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useCalendarCalls } from "@/hooks/useCalendarCalls";
 import { useCallRecordings } from "@/hooks/useCallRecordings";
@@ -12,23 +11,199 @@ import { useUserTier } from "@/hooks/useUserTier";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CallCardRedesigned } from "@/components/calendar/CallCardRedesigned";
-import { RecordingCardRedesigned } from "@/components/calendar/RecordingCardRedesigned";
+import { RecordingsFolderView } from "@/components/calendar/RecordingsFolderView";
 import { DateGroupHeader } from "@/components/calendar/DateGroupHeader";
+import { DEMO_RECORDINGS } from "@/utils/demoData";
 import { CallCreateModal } from "@/components/calendar/CallCreateModal";
 import { CallEditModal } from "@/components/calendar/CallEditModal";
 import { RecordingCreateModal } from "@/components/calendar/RecordingCreateModal";
 import { RecordingEditModal } from "@/components/calendar/RecordingEditModal";
 import { CalendarCallModal } from "@/components/calendar/CalendarCallModal";
-import { CalendarGrid } from "@/components/calendar/CalendarGrid";
-import { UpcomingCallsSidePanel } from "@/components/calendar/UpcomingCallsSidePanel";
+// CalendarGrid and UpcomingCallsSidePanel removed -- replaced by WeekListView
 import { RecordingModal } from "@/components/calendar/RecordingModal";
 import { MobileLogoHeader } from "@/components/MobileLogoHeader";
 import { GradientSection } from "@/components/GradientSection";
-import { Plus, Upload, Info, Calendar as CalendarIcon } from "lucide-react";
+import { Plus, Upload, Info, Calendar as CalendarIcon, Play } from "lucide-react";
 import { useState, useMemo } from "react";
-import { subWeeks, subMonths } from "date-fns";
-import { isCallUpcomingInUserTZ, getDateInUserTimezone } from "@/utils/timezoneHelpers";
+import { format, isToday, isTomorrow, startOfWeek, endOfWeek, addWeeks, eachDayOfInterval, isSameDay, parseISO as parseISODate, getDay } from "date-fns";
+import { isCallUpcomingInUserTZ, getDateInUserTimezone, formatTimeInUserTZ, convertToUserTimezone } from "@/utils/timezoneHelpers";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Video, Clock, ChevronRight, ChevronLeft } from "lucide-react";
+import type { CalendarCall } from "@/hooks/useCalendarCalls";
+import { getDemoRsvpStatus } from "@/hooks/useCallRsvp";
+import { useAuth } from "@/hooks/useAuth";
+
+function WeekListView({ calls, onCallClick }: { calls: CalendarCall[]; onCallClick: (call: CalendarCall) => void }) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const { user } = useAuth();
+
+  const weekStart = startOfWeek(addWeeks(new Date(), weekOffset), { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(addWeeks(new Date(), weekOffset), { weekStartsOn: 1 });
+  const daysOfWeek = eachDayOfInterval({ start: weekStart, end: weekEnd });
+
+  const weekLabel = `${format(weekStart, "MMM d")} - ${format(weekEnd, "MMM d, yyyy")}`;
+
+  // Demo call schedule (recurring weekly)
+  const MOCK_SCHEDULE = [
+    { title: 'Warehouse Call',      dayOfWeek: 1, time: '10:00', description: 'Weekly warehouse operations and inventory review' },
+    { title: 'Mindset Monday',      dayOfWeek: 1, time: '09:00', description: 'Start the week with focus and accountability' },
+    { title: 'Brand Outreach Call', dayOfWeek: 2, time: '14:00', description: 'Group session on brand outreach strategies' },
+    { title: 'Training Session',    dayOfWeek: 3, time: '11:00', description: 'Hands-on training for sourcing and listing' },
+    { title: 'Brand Outreach Call', dayOfWeek: 4, time: '14:00', description: 'Follow-up outreach session and role play' },
+    { title: 'Q&A Session',         dayOfWeek: 5, time: '15:00', description: 'Open Q&A with coaches -- bring your questions' },
+  ];
+
+  // Merge real calls with demo calls for the week
+  const callsByDay = useMemo(() => {
+    const map: Record<string, CalendarCall[]> = {};
+    daysOfWeek.forEach(day => {
+      const key = format(day, "yyyy-MM-dd");
+      const realCalls = calls.filter(call => call.call_date === key);
+
+      // Generate demo calls for this day if no real calls
+      const dow = getDay(day);
+      const demoCalls: CalendarCall[] = MOCK_SCHEDULE
+        .filter(m => m.dayOfWeek === dow)
+        .filter(m => !realCalls.some(rc => rc.title === m.title && rc.call_time?.startsWith(m.time)))
+        .map(m => ({
+          id: `mock-${m.title.replace(/\s+/g, '-').toLowerCase()}-${key}`,
+          title: m.title,
+          description: m.description,
+          call_date: key,
+          call_time: m.time,
+          timezone: 'America/New_York',
+          call_link: '',
+          is_recurring: true,
+          recurrence_pattern: null,
+          series_id: null,
+          google_calendar_event_id: null,
+          visible_tiers: null,
+          visible_tier_ids: null,
+          created_by: 'demo',
+          is_active: true,
+          created_at: null as any,
+          updated_at: null as any,
+        }));
+
+      map[key] = [...realCalls, ...demoCalls].sort((a, b) => (a.call_time || '').localeCompare(b.call_time || ''));
+    });
+    return map;
+  }, [calls, daysOfWeek]);
+
+  const totalCallsThisWeek = Object.values(callsByDay).reduce((sum, arr) => sum + arr.length, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Week navigation header */}
+      <div className="flex items-center justify-between rounded-xl border bg-card px-5 py-4">
+        <Button variant="ghost" size="sm" onClick={() => setWeekOffset(w => w - 1)} className="gap-1">
+          <ChevronLeft className="h-4 w-4" /> Prev
+        </Button>
+        <div className="text-center">
+          <h2 className="text-lg font-bold text-foreground">{weekLabel}</h2>
+          <p className="text-sm text-muted-foreground">
+            {totalCallsThisWeek} {totalCallsThisWeek === 1 ? 'call' : 'calls'} this week
+            {weekOffset === 0 && ' (current week)'}
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => setWeekOffset(w => w + 1)} className="gap-1">
+          Next <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Day-by-day list */}
+      <div className="space-y-3">
+        {daysOfWeek.map(day => {
+          const key = format(day, "yyyy-MM-dd");
+          const dayCalls = callsByDay[key] || [];
+          const dayIsToday = isToday(day);
+          const dayIsPast = day < new Date(new Date().toDateString()) && !dayIsToday;
+
+          return (
+            <div
+              key={key}
+              className={`rounded-xl border overflow-hidden transition-all ${
+                dayIsToday ? 'border-primary/40 bg-primary/5' : dayIsPast ? 'opacity-50' : 'bg-card'
+              }`}
+            >
+              {/* Day header */}
+              <div className={`flex items-center justify-between px-5 py-3 ${
+                dayIsToday ? 'bg-primary/10' : 'bg-muted/30'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <span className={`text-2xl font-extrabold ${dayIsToday ? 'text-primary' : 'text-foreground'}`}>
+                    {format(day, "d")}
+                  </span>
+                  <div>
+                    <p className={`text-sm font-bold ${dayIsToday ? 'text-primary' : 'text-foreground'}`}>
+                      {format(day, "EEEE")}
+                      {dayIsToday && <span className="ml-2 text-xs font-medium bg-primary text-primary-foreground rounded-full px-2 py-0.5">Today</span>}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{format(day, "MMMM d, yyyy")}</p>
+                  </div>
+                </div>
+                <span className="text-sm font-semibold text-muted-foreground">
+                  {dayCalls.length} {dayCalls.length === 1 ? 'call' : 'calls'}
+                </span>
+              </div>
+
+              {/* Calls for this day */}
+              {dayCalls.length === 0 ? (
+                <div className="px-5 py-4 text-center">
+                  <p className="text-sm text-muted-foreground/50">No calls scheduled</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {dayCalls.map(call => {
+                    const timeLabel = formatTimeInUserTZ(call.call_date, call.call_time, call.timezone).replace(/ [A-Z]{3,4}$/, '');
+                    const rsvpStatus = user?.id ? getDemoRsvpStatus(call.id, user.id) : null;
+                    const dateObj = convertToUserTimezone(call.call_date, call.call_time, call.timezone);
+                    const isLive = isToday(dateObj) && (() => {
+                      if (!call.call_time) return false;
+                      const [h, m] = call.call_time.split(":").map(Number);
+                      const start = new Date(dateObj); start.setHours(h, m, 0, 0);
+                      return Date.now() >= start.getTime() - 1800000 && Date.now() <= start.getTime() + 7200000;
+                    })();
+
+                    return (
+                      <button
+                        key={call.id}
+                        onClick={() => onCallClick(call)}
+                        className="w-full flex items-center gap-4 px-5 py-4 hover:bg-accent/50 transition-colors text-left"
+                      >
+                        <div className={`flex items-center justify-center h-11 w-11 rounded-xl shrink-0 ${
+                          isLive ? 'bg-emerald-500/15' : 'bg-cyan-500/10'
+                        }`}>
+                          {isLive ? <Play className="h-5 w-5 text-emerald-500" /> : <Video className="h-5 w-5 text-cyan-500" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-base font-semibold text-foreground">{call.title}</p>
+                          <p className="text-sm text-muted-foreground">{timeLabel}</p>
+                          {call.description && (
+                            <p className="text-xs text-muted-foreground/70 mt-0.5 line-clamp-1">{call.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {rsvpStatus === 'yes' && (
+                            <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2.5 py-1">RSVP'd</span>
+                          )}
+                          {isLive && (
+                            <span className="text-xs font-medium text-emerald-600 bg-emerald-500/10 rounded-full px-2.5 py-1 animate-pulse">Live</span>
+                          )}
+                          <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function Calendar() {
   const {
@@ -48,7 +223,8 @@ export default function Calendar() {
   const { isCSM } = useRoleCheck();
   const canManageCalendar = isAdmin || isCSM;
   const {
-    tierId
+    tierId,
+    tierKey
   } = useUserTier();
   const isMobile = useIsMobile();
   const recordingIds = useMemo(() => recordings.map(r => r.id), [recordings]);
@@ -78,7 +254,6 @@ export default function Calendar() {
   const [selectedCall, setSelectedCall] = useState<any>(null);
   const [selectedRecording, setSelectedRecording] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateFilter, setDateFilter] = useState("all");
 
   // Filter to only truly upcoming calls
   const upcomingCalls = useMemo(() => {
@@ -95,19 +270,26 @@ export default function Calendar() {
     });
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [upcomingCalls]);
+  // Fallback to demo recordings when Supabase has no data yet
+  const displayRecordings = useMemo(
+    () => (recordings.length > 0 ? recordings : DEMO_RECORDINGS),
+    [recordings],
+  );
+
   const filteredRecordings = useMemo(() => {
-    let filtered = recordings;
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(r => r.title.toLowerCase().includes(query) || r.description?.toLowerCase().includes(query) || r.tags.some(tag => tag.toLowerCase().includes(query)));
-    }
-    if (dateFilter !== "all") {
-      const now = new Date();
-      const cutoff = dateFilter === "week" ? subWeeks(now, 1) : dateFilter === "month" ? subMonths(now, 1) : subMonths(now, 3);
-      filtered = filtered.filter(r => new Date(r.recorded_date) >= cutoff);
-    }
-    return filtered;
-  }, [recordings, searchQuery, dateFilter]);
+    if (!searchQuery) return displayRecordings;
+    const query = searchQuery.toLowerCase();
+    return displayRecordings.filter(
+      r =>
+        r.title.toLowerCase().includes(query) ||
+        r.description?.toLowerCase().includes(query) ||
+        r.tags.some(tag => tag.toLowerCase().includes(query)),
+    );
+  }, [displayRecordings, searchQuery]);
+
+  // Inner Circle is gated to Platinum + Diamond; staff/admin always see it.
+  const canSeeInnerCircle =
+    canManageCalendar || tierKey === 'platinum' || tierKey === 'diamond';
   return <div className="flex-1 overflow-y-auto bg-content" data-tour="calendar-view">
       {/* Gradient Section - wraps header and tabs list */}
       <GradientSection className="px-4 md:px-6 py-5" paddingBottom="0px">
@@ -161,26 +343,14 @@ export default function Calendar() {
         {/* Tab Content - no gradient */}
         <div className="px-4 md:px-6 pb-24 md:pb-6">
           <TabsContent value="upcoming" className="space-y-4 mt-0">
-            <div className="flex flex-col md:flex-row gap-4">
-              {/* Calendar Grid */}
-              <div className="flex-1 min-w-0 md:w-[62%]">
-                <CalendarGrid calls={calls} onCallClick={(call) => {
-                  setSelectedCall(call);
-                  setShowCallDetailModal(true);
-                }} />
-              </div>
-
-              {/* Desktop Side Panel */}
-              <div className="hidden md:block md:w-[38%] md:max-w-sm">
-                <UpcomingCallsSidePanel
-                  calls={upcomingCalls}
-                  onCallClick={(call) => {
-                    setSelectedCall(call);
-                    setShowCallDetailModal(true);
-                  }}
-                />
-              </div>
-            </div>
+            {/* Week list view -- replaces calendar grid */}
+            <WeekListView
+              calls={calls}
+              onCallClick={(call) => {
+                setSelectedCall(call);
+                setShowCallDetailModal(true);
+              }}
+            />
 
             {canManageCalendar && <Alert className="text-xs md:text-sm">
                 <Info className="h-4 w-4" />
@@ -212,36 +382,33 @@ export default function Calendar() {
           </TabsContent>
 
 
-          <TabsContent value="recordings" className="space-y-6 mt-0">
+          <TabsContent value="recordings" className="space-y-4 mt-0">
             {canManageCalendar && <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>🔓 Staff View: You can see recordings from all tiers</AlertDescription>
               </Alert>}
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Input placeholder="Search recordings..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="flex-1 bg-white" />
-              <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger className="w-full sm:w-48 bg-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All time</SelectItem>
-                  <SelectItem value="week">Past week</SelectItem>
-                  <SelectItem value="month">Past month</SelectItem>
-                  <SelectItem value="3months">Past 3 months</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Input
+              placeholder="Search recordings..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="bg-white"
+            />
 
-            {recordingsLoading ? <p className="text-muted-foreground text-center py-8">Loading...</p> : filteredRecordings.length === 0 ? <p className="text-muted-foreground text-center py-8">No recordings found</p> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredRecordings.map(recording => <RecordingCardRedesigned key={recording.id} recording={recording} isAdmin={canManageCalendar} hasFathomNotes={fathomRecordingIds.includes(recording.id)} onEdit={rec => {
-              setSelectedRecording(rec);
-              setShowRecordingEditModal(true);
-            }} onDelete={deleteRecording} onClick={rec => {
-              setSelectedRecording(rec);
-              setShowRecordingDetailModal(true);
-            }} />)}
-              </div>}
+            {recordingsLoading ? (
+              <p className="text-muted-foreground text-center py-8">Loading...</p>
+            ) : filteredRecordings.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No recordings match that search</p>
+            ) : (
+              <RecordingsFolderView
+                recordings={filteredRecordings}
+                canSeeInnerCircle={canSeeInnerCircle}
+                onRecordingClick={rec => {
+                  setSelectedRecording(rec);
+                  setShowRecordingDetailModal(true);
+                }}
+              />
+            )}
           </TabsContent>
         </div>
       </Tabs>

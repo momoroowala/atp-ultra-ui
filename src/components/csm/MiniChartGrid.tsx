@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useAllCallRsvpCounts } from '@/hooks/useCallRsvp';
+import type { PhaseDropOff } from '@/hooks/useCSMMetrics';
 
 // ── Pure CSS bar helper ──
 function CSSBar({ value, max, color, className = '' }: { value: number; max: number; color: string; className?: string }) {
@@ -11,6 +12,28 @@ function CSSBar({ value, max, color, className = '' }: { value: number; max: num
   );
 }
 
+// ── Mini sparkline (7 vertical bars) ──
+function Sparkline({ data, color = '#3B82F6' }: { data: number[]; color?: string }) {
+  const max = Math.max(...data, 1);
+  return (
+    <div className="flex items-end gap-[3px] h-[32px]">
+      {data.map((v, i) => (
+        <div
+          key={i}
+          className="flex-1 rounded-sm transition-all"
+          style={{
+            height: `${Math.max((v / max) * 100, 4)}%`,
+            backgroundColor: color,
+            opacity: i === data.length - 1 ? 1 : 0.6,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 // ── Card 1: Outreach Effectiveness ──
 export function OutreachEffectivenessCard({ contactedCount, reEngagedFromOutreach }: { contactedCount: number; reEngagedFromOutreach: number }) {
   const pct = contactedCount > 0 ? Math.round((reEngagedFromOutreach / contactedCount) * 100) : -1;
@@ -18,11 +41,11 @@ export function OutreachEffectivenessCard({ contactedCount, reEngagedFromOutreac
 
   return (
     <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col h-full justify-between">
-      <p className="text-[13px] font-semibold text-muted-foreground mb-1">📞 Outreach Effectiveness</p>
+      <p className="text-[13px] font-semibold text-muted-foreground mb-1">Outreach Effectiveness</p>
       {pct < 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-xl font-bold text-muted-foreground">—</p>
+            <p className="text-xl font-bold text-muted-foreground">--</p>
             <p className="text-[10px] text-muted-foreground">No outreach data yet</p>
           </div>
         </div>
@@ -46,40 +69,78 @@ export function OutreachEffectivenessCard({ contactedCount, reEngagedFromOutreac
   );
 }
 
-// ── Card 2: Weekly Activity Trend ──
-export function WeeklyActivityCard({ wau }: { wau: number }) {
+// ── Card 2: Weekly Activity Trend (with sparkline) ──
+export function WeeklyActivityCard({ wau, dailyActiveUsers }: { wau: number; dailyActiveUsers?: number[] }) {
   return (
     <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col h-full">
-      <p className="text-[13px] font-semibold text-muted-foreground mb-1">📈 Weekly Activity Trend</p>
+      <p className="text-[13px] font-semibold text-muted-foreground mb-1">Weekly Activity Trend</p>
       <div className="flex items-baseline gap-2">
         <p className="text-xl font-bold leading-none">{wau}</p>
-        <span className="text-[10px] font-medium text-muted-foreground">active users this week</span>
+        <span className="text-[10px] font-medium text-muted-foreground">active this week</span>
       </div>
-      <div className="flex-1 flex items-center justify-center mt-2">
-        <p className="text-[10px] text-muted-foreground">Daily breakdown not yet available</p>
-      </div>
+      {dailyActiveUsers && dailyActiveUsers.length === 7 ? (
+        <div className="mt-2 flex-1 flex flex-col justify-end">
+          <Sparkline data={dailyActiveUsers} color="#3B82F6" />
+          <div className="flex justify-between mt-1">
+            {DAY_LABELS.map((d) => (
+              <span key={d} className="text-[8px] text-muted-foreground flex-1 text-center">{d}</span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center mt-2">
+          <p className="text-[10px] text-muted-foreground">Daily breakdown not yet available</p>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Card 3: Course Bottleneck ──
-export function CourseBottleneckCard({ stuckStudents, onClick }: { stuckStudents: number; onClick?: () => void }) {
+// ── Card 3: Course Bottleneck (with phase drop-off) ──
+export function CourseBottleneckCard({
+  stuckStudents,
+  bottleneckPhase,
+  phaseDropOff,
+  onClick,
+}: {
+  stuckStudents: number;
+  bottleneckPhase?: { name: string; stuckCount: number } | null;
+  phaseDropOff?: PhaseDropOff[];
+  onClick?: () => void;
+}) {
   if (stuckStudents === 0) {
     return (
       <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col items-center justify-center h-full">
-        <p className="text-[13px] font-semibold text-muted-foreground mb-1">🚧 Course Bottleneck</p>
-        <p className="text-sm font-medium">No bottlenecks detected 🎉</p>
+        <p className="text-[13px] font-semibold text-muted-foreground mb-1">Course Bottleneck</p>
+        <p className="text-sm font-medium text-foreground">No bottlenecks detected</p>
       </div>
     );
   }
 
   return (
     <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col h-full cursor-pointer hover:ring-1 hover:ring-primary/20 transition" onClick={onClick}>
-      <p className="text-[13px] font-semibold text-muted-foreground mb-1">🚧 Course Bottleneck</p>
-      <p className="text-lg font-bold leading-none">{stuckStudents} <span className="text-[10px] font-medium text-muted-foreground">students stuck</span></p>
-      <div className="flex-1 flex items-center justify-center mt-2">
-        <p className="text-[10px] text-muted-foreground">Click for details</p>
-      </div>
+      <p className="text-[13px] font-semibold text-muted-foreground mb-1">Course Bottleneck</p>
+      <p className="text-lg font-bold leading-none text-foreground">
+        {stuckStudents} <span className="text-[10px] font-medium text-muted-foreground">students stuck</span>
+      </p>
+      {bottleneckPhase && (
+        <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
+          Worst: {bottleneckPhase.name} ({bottleneckPhase.stuckCount})
+        </p>
+      )}
+      {phaseDropOff && phaseDropOff.length > 0 && (
+        <div className="mt-1.5 space-y-1 flex-1">
+          {phaseDropOff.map((p) => (
+            <div key={p.phase} className="flex items-center gap-1.5">
+              <span className="text-[9px] text-muted-foreground w-[52px] truncate">{p.phase.split(' ')[0]}</span>
+              <div className="flex-1 h-[4px] rounded-full overflow-hidden" style={{ backgroundColor: 'hsl(var(--muted))' }}>
+                <div className="h-full rounded-full" style={{ width: `${p.pct}%`, backgroundColor: p.count > 0 ? '#F59E0B' : 'transparent' }} />
+              </div>
+              <span className="text-[9px] text-muted-foreground w-3 text-right">{p.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -97,11 +158,11 @@ export function CallAttendanceCard({ onClick }: { onClick?: () => void }) {
 
   return (
     <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col h-full justify-between cursor-pointer hover:ring-1 hover:ring-primary/20 transition" onClick={onClick}>
-      <p className="text-[13px] font-semibold text-muted-foreground mb-1">📅 Call Attendance</p>
+      <p className="text-[13px] font-semibold text-muted-foreground mb-1">Call Attendance</p>
       {attendancePct < 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-xl font-bold text-muted-foreground">—</p>
+            <p className="text-xl font-bold text-muted-foreground">--</p>
             <p className="text-[10px] text-muted-foreground">No RSVP data yet</p>
           </div>
         </div>
@@ -126,7 +187,159 @@ export function CallAttendanceCard({ onClick }: { onClick?: () => void }) {
   );
 }
 
-// ── Insight Cards (vertical stack for right column) ──
+// ── Card 5: Revenue at Risk ──
+export function RevenueAtRiskCard({
+  revenueAtRisk,
+  totalPortfolioValue,
+  atRiskCount,
+  onClick,
+}: {
+  revenueAtRisk: number;
+  totalPortfolioValue: number;
+  atRiskCount: number;
+  onClick?: () => void;
+}) {
+  const pct = totalPortfolioValue > 0 ? Math.round((revenueAtRisk / totalPortfolioValue) * 100) : 0;
+  const color = pct <= 10 ? '#16A34A' : pct <= 25 ? '#F59E0B' : '#DC2626';
+  const fmt = (n: number) => n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n}`;
+
+  return (
+    <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col h-full justify-between cursor-pointer hover:ring-1 hover:ring-primary/20 transition" onClick={onClick}>
+      <p className="text-[13px] font-semibold text-muted-foreground mb-1">Revenue at Risk</p>
+      <p className="text-xl font-bold leading-none" style={{ color }}>{fmt(revenueAtRisk)}</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5">from {atRiskCount} students</p>
+      <CSSBar value={pct} max={100} color={color} className="mt-1.5" />
+      <div className="flex items-center justify-between mt-1.5">
+        <span className="text-[10px] text-muted-foreground">Portfolio: {fmt(totalPortfolioValue)}</span>
+        <span className="text-[10px] font-medium" style={{ color }}>{pct}% at risk</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Card 6: NPS Score ──
+export function NPSScoreCard({
+  npsScore,
+  npsBreakdown,
+  onClick,
+}: {
+  npsScore: number;
+  npsBreakdown: { promoters: number; passives: number; detractors: number };
+  onClick?: () => void;
+}) {
+  const total = npsBreakdown.promoters + npsBreakdown.passives + npsBreakdown.detractors;
+  const color = npsScore >= 50 ? '#16A34A' : npsScore >= 0 ? '#F59E0B' : '#DC2626';
+
+  return (
+    <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col h-full justify-between cursor-pointer hover:ring-1 hover:ring-primary/20 transition" onClick={onClick}>
+      <p className="text-[13px] font-semibold text-muted-foreground mb-1">NPS Score</p>
+      {total === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-xl font-bold text-muted-foreground">--</p>
+        </div>
+      ) : (
+        <>
+          <p className="text-xl font-bold leading-none" style={{ color }}>
+            {npsScore > 0 ? '+' : ''}{npsScore}
+          </p>
+          {/* Three-segment bar */}
+          <div className="flex rounded-full overflow-hidden mt-2" style={{ height: 6 }}>
+            {npsBreakdown.promoters > 0 && (
+              <div style={{ flex: npsBreakdown.promoters, backgroundColor: '#16A34A' }} />
+            )}
+            {npsBreakdown.passives > 0 && (
+              <div style={{ flex: npsBreakdown.passives, backgroundColor: '#F59E0B' }} />
+            )}
+            {npsBreakdown.detractors > 0 && (
+              <div style={{ flex: npsBreakdown.detractors, backgroundColor: '#DC2626' }} />
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-green-600" />
+              <span className="text-[10px] text-muted-foreground">{npsBreakdown.promoters} promoters</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500" />
+              <span className="text-[10px] text-muted-foreground">{npsBreakdown.passives} passives</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-600" />
+              <span className="text-[10px] text-muted-foreground">{npsBreakdown.detractors} detractors</span>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Card 7: First Sale Conversion ──
+export function FirstSaleConversionCard({
+  conversionRate,
+  firstSaleCount,
+  totalStudents,
+  onClick,
+}: {
+  conversionRate: number;
+  firstSaleCount: number;
+  totalStudents: number;
+  onClick?: () => void;
+}) {
+  const color = conversionRate >= 40 ? '#16A34A' : conversionRate >= 20 ? '#F59E0B' : '#DC2626';
+
+  return (
+    <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col h-full justify-between cursor-pointer hover:ring-1 hover:ring-primary/20 transition" onClick={onClick}>
+      <p className="text-[13px] font-semibold text-muted-foreground mb-1">First Sale Conversion</p>
+      <p className="text-xl font-bold leading-none" style={{ color }}>{conversionRate}%</p>
+      <CSSBar value={conversionRate} max={100} color={color} className="mt-1.5" />
+      <p className="text-[10px] text-muted-foreground mt-1.5">{firstSaleCount} of {totalStudents} students made a sale</p>
+    </div>
+  );
+}
+
+// ── Card 8: Community Engagement ──
+export function CommunityEngagementCard({
+  engagementRate,
+  onClick,
+}: {
+  engagementRate: number;
+  onClick?: () => void;
+}) {
+  const color = engagementRate >= 60 ? '#16A34A' : engagementRate >= 30 ? '#F59E0B' : '#DC2626';
+
+  return (
+    <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col h-full justify-between cursor-pointer hover:ring-1 hover:ring-primary/20 transition" onClick={onClick}>
+      <p className="text-[13px] font-semibold text-muted-foreground mb-1">Community Engagement</p>
+      <p className="text-xl font-bold leading-none" style={{ color }}>{engagementRate}%</p>
+      <CSSBar value={engagementRate} max={100} color={color} className="mt-1.5" />
+      <p className="text-[10px] text-muted-foreground mt-1.5">students active in community</p>
+    </div>
+  );
+}
+
+// ── Summary stat card (for Financial/Engagement tabs) ──
+export function SummaryStatCard({
+  label,
+  value,
+  subtitle,
+  color = 'text-foreground',
+}: {
+  label: string;
+  value: string;
+  subtitle: string;
+  color?: string;
+}) {
+  return (
+    <div className="bg-card rounded-lg border p-2.5 shadow-sm overflow-hidden flex flex-col h-full justify-center">
+      <p className="text-[13px] font-semibold text-muted-foreground mb-1">{label}</p>
+      <p className={`text-xl font-bold leading-none ${color}`}>{value}</p>
+      <p className="text-[10px] text-muted-foreground mt-1">{subtitle}</p>
+    </div>
+  );
+}
+
+// ── Insight Cards (vertical stack for right column -- legacy) ──
 interface InsightCardsProps {
   contactedCount: number;
   reEngagedFromOutreach: number;
@@ -156,18 +369,18 @@ interface TrackingRowProps {
 export function TrackingRow({ reEngagedCount, offboardedCount, onReEngagementClick, onOffboardingClick }: TrackingRowProps) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="flex gap-2 h-full items-stretch">
-      {/* Re-Engagement Tracking — 60% */}
+      {/* Re-Engagement Tracking -- 60% */}
       <div className="bg-card rounded-lg border shadow-sm flex flex-col min-h-[120px] h-full cursor-pointer hover:ring-1 hover:ring-primary/20 transition" style={{ flex: '0.6', padding: '10px 14px' }} onClick={onReEngagementClick}>
         {reEngagedCount === 0 ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <p className="text-[13px] font-semibold text-foreground mb-1.5">🔄 Re-Engagement Tracking</p>
+              <p className="text-[13px] font-semibold text-foreground mb-1.5">Re-Engagement Tracking</p>
               <p className="text-[11px] text-muted-foreground">No re-engagements yet</p>
             </div>
           </div>
         ) : (
           <>
-            <p className="text-[13px] font-semibold text-foreground mb-1.5 text-center w-full">🔄 Re-Engagement Tracking</p>
+            <p className="text-[13px] font-semibold text-foreground mb-1.5 text-center w-full">Re-Engagement Tracking</p>
             <div className="flex justify-around w-full">
               <div className="flex flex-col items-center">
                 <p className="text-[18px] font-bold leading-none text-foreground">{reEngagedCount}</p>
@@ -181,9 +394,9 @@ export function TrackingRow({ reEngagedCount, offboardedCount, onReEngagementCli
         )}
       </div>
 
-      {/* Offboarding Tracking — 40% */}
+      {/* Offboarding Tracking -- 40% */}
       <div className="bg-card rounded-lg border shadow-sm flex flex-col min-h-[120px] h-full cursor-pointer hover:ring-1 hover:ring-primary/20 transition" style={{ flex: '0.4', padding: '10px 14px' }} onClick={onOffboardingClick}>
-        <p className="text-[13px] font-semibold text-foreground mb-1.5 text-center w-full">📋 Offboarding Tracking</p>
+        <p className="text-[13px] font-semibold text-foreground mb-1.5 text-center w-full">Offboarding Tracking</p>
         {offboardedCount === 0 ? (
           <div className="flex-1 flex items-center justify-center">
             <p className="text-[11px] text-muted-foreground">No offboarding data yet</p>

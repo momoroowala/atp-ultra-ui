@@ -68,7 +68,16 @@ async function getUserInfo() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+
+  if (!user) {
+    // Demo mode fallback (GitHub Pages -- auth is bypassed)
+    if (import.meta.env.BASE_URL !== '/') {
+      const result = { email: 'mo@test.dev', name: 'Mo', userId: 'demo-admin-001', tierId: null };
+      _cachedUserInfo = { ...result, expiresAt: now + 5 * 60 * 1000 };
+      return result;
+    }
+    throw new Error("Not authenticated");
+  }
 
   const { data: profile } = await supabase
     .from("user_profiles")

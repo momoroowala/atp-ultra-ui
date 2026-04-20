@@ -5,6 +5,7 @@ import { useCSMStudents, useCSMList } from '@/hooks/useCSMStudents';
 import { useMyAssignedStudentIds } from '@/hooks/useMyAssignedStudentIds';
 import { LeadCard } from '@/components/brand-leads/LeadCard';
 import { LeadTable } from '@/components/brand-leads/LeadTable';
+import { LeadPipeline } from '@/components/brand-leads/LeadPipeline';
 import { LeadFilters, FilterUser } from '@/components/brand-leads/LeadFilters';
 import { AddLeadDialog } from '@/components/brand-leads/AddLeadDialog';
 import { LeadDetailSheet } from '@/components/brand-leads/LeadDetailSheet';
@@ -22,7 +23,7 @@ const LEAD_GOAL = 100;
 const TIP_DISMISSED_KEY = 'brand_leads_tip_dismissed';
 const VIEW_PREF_KEY = 'brand_leads_view';
 
-type ViewMode = 'table' | 'cards';
+type ViewMode = 'table' | 'cards' | 'pipeline';
 
 // Pipeline status colors for the summary bar (bg for the segment background)
 const pipelineColors: Record<string, string> = {
@@ -198,6 +199,12 @@ const BrandLeads = () => {
                 >
                   Cards
                 </button>
+                <button
+                  className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors", view === 'pipeline' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground')}
+                  onClick={() => handleViewChange('pipeline')}
+                >
+                  Pipeline
+                </button>
               </div>
               <Button onClick={() => setImportOpen(true)} size="sm" variant="outline" className="gap-1.5">
                 <Upload className="h-4 w-4" /> Import
@@ -323,6 +330,17 @@ const BrandLeads = () => {
                   <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
                 ))}
               </div>
+            ) : view === 'pipeline' ? (
+              <div className="flex gap-3 overflow-x-auto">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="w-[220px] shrink-0 space-y-2">
+                    <div className="h-6 rounded bg-muted animate-pulse w-24" />
+                    {[...Array(3)].map((_, j) => (
+                      <div key={j} className="h-24 rounded-lg bg-muted animate-pulse" />
+                    ))}
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[...Array(6)].map((_, i) => (
@@ -350,6 +368,12 @@ const BrandLeads = () => {
               onDeleteLead={(id) => deleteLead.mutate(id)}
               createLead={createLead}
               showClientActions={showClientActions}
+            />
+          ) : view === 'pipeline' ? (
+            <LeadPipeline
+              leads={filtered}
+              onSelectLead={setSelectedLead}
+              onUpdateStatus={(id, status) => updateLead.mutate({ id, updates: { status } })}
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

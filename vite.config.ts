@@ -6,6 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  base: process.env.GITHUB_PAGES === '1' ? '/atp-ultra-ui/' : '/',
   server: {
     host: "::",
     port: 8080,

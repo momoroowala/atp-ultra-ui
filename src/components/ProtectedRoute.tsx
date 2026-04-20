@@ -9,6 +9,11 @@ interface ProtectedRouteProps {
 export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
 
+  // On GitHub Pages (static deploy), bypass auth -- it's a demo
+  if (import.meta.env.BASE_URL !== '/') {
+    return <>{children}</>;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">

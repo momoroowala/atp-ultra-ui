@@ -1,0 +1,2 @@
+ALTER TABLE public.ticket_metadata ADD COLUMN IF NOT EXISTS sme_ticket_id text;
+CREATE INDEX IF NOT EXISTS idx_ticket_metadata_sme_ticket_id ON public.ticket_metadata (sme_ticket_id) WHERE sme_ticket_id IS NOT NULL;

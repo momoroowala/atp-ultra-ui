@@ -147,10 +147,23 @@ export const useAllCallRsvpCounts = () => {
       const { data, error } = await supabase
         .from('call_rsvps' as any)
         .select('call_id, status');
-      if (error) throw error;
-      const all = (data || []) as unknown as { call_id: string; status: string }[];
+
+      // Fallback to localStorage demo RSVPs when Supabase fails or returns empty
+      const rsvpRows = (error || !data || data.length === 0)
+        ? (() => {
+            const demo = getDemoRsvps();
+            const rows: { call_id: string; status: string }[] = [];
+            Object.entries(demo).forEach(([callId, users]) => {
+              Object.entries(users).forEach(([, status]) => {
+                rows.push({ call_id: callId, status });
+              });
+            });
+            return rows;
+          })()
+        : (data as unknown as { call_id: string; status: string }[]);
+
       const byCall: Record<string, { yes: number; no: number }> = {};
-      all.forEach(r => {
+      rsvpRows.forEach(r => {
         if (!byCall[r.call_id]) byCall[r.call_id] = { yes: 0, no: 0 };
         if (r.status === 'yes') byCall[r.call_id].yes++;
         else byCall[r.call_id].no++;

@@ -1,0 +1,2 @@
+UPDATE tiers SET page_visibility = '{"home":true,"courses":true,"my_plan":true,"calendar":true,"community":true,"one_on_ones":false,"support":true,"brand_leads":false}'::jsonb
+WHERE tier_key IN ('silver','gold');
