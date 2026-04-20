@@ -1,1 +1,0 @@
-import{j as e}from"./vendor-query-Bov9BLfD.js";import{Z as s,aI as i}from"./index-DeAPs4-E.js";const l=({className:o=""})=>s()?e.jsx("div",{className:`flex justify-center py-4 ${o}`,children:e.jsx("img",{src:i,alt:"Logo",className:"h-12 w-12 object-contain"})}):null;export{l as M};
